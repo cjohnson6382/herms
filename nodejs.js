@@ -38,6 +38,7 @@ function authorize(credentials, callback) {
   });
 }
 
+//  this is the code I have to modify
 function getNewToken (oauth2Client, callback) {
   var authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
@@ -60,6 +61,8 @@ function getNewToken (oauth2Client, callback) {
     });
   });
 }
+//////////////////////////////////////////
+
 
 function storeToken (token) {
   try { fs.mkdirSync(TOKEN_DIR); } catch (err) { if (err.code != 'EEXIST') { throw err; }}
