@@ -21,13 +21,14 @@ var scopes = [
     'https://www.googleapis.com/auth/drive.file'
 ];
 
-var authDance = async.waterfall([
-    //  read the client_secret.json file, convert the JSON into a key/value array with parse, and then send it to authorize to do the actual authorization
+async.waterfall([
     function (callback) {
         fs.readFile('client_secret.json', function (err, content) {
             if (err === null) {
                 callback(null, JSON.parse(content));
-            } else { return }
+            } else { 
+                return 
+            }
         })        
     },
     function (credentials, callback) {
@@ -36,34 +37,30 @@ var authDance = async.waterfall([
         var redirectUrl = credentials.web.redirect_uris[0];
 
         var oauth2Client = new OAuth2(clientId, clientSecret, redirectUrl);
-        
         callback(null, oauth2Client);
-    }  
-], function (err, oauth2Client) {
-    if (err === null) {
+    },
+    function (oauth2Client, callback) {
         authorization_url = oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: scopes
+                access_type: 'offline',
+                scope: scopes
+            })
+        callback(null, authorization_url);
+    },
+    function (authorization_url, callback) {
+        app.get('/', function (req, res) {
+            res.send('<a href="/auth">DERP GOOGLE AUTH DERP</a>');
+        }),
+        app.get('/auth', function (req, res) {
+            res.redirect(authorization_url);
+        }),
+        app.get('/callback', function (req, res) {
+            console.log('code: ' + req.code);
+            console.log('req: ' + req);
         })
-        setupRoutes();
-    } else { console.log("err at waterfall function: " + err); }
-});
-
-var setupRoutes = async.parallel([
-    app.get('/', function (req, res) {
-        res.send('<a href="/auth">DERP GOOGLE AUTH DERP</a>');
-    }),
-    app.get('/auth', function (req, res) {
-        res.redirect(authorization_url);
-    }),
-    app.get('/callback', function (req, res) {
-        console.log('code: ' + req.code);
-        console.log('req: ' + req);
-    })
-], function (err, results) {
-    if (err !== null) {
-        console.log('err occurred in the async.parallel call: ' + err);
-    } else {
+        callback();
+    },
+], function (err, result) {
+    if (!err) {
         var options = {
             key : fs.readFileSync('server.enc.key'),
             cert: fs.readFileSync('server.crt')
@@ -72,7 +69,7 @@ var setupRoutes = async.parallel([
             console.log('Server is started as HTTPS');
         })
     }
-})
+});
 
 //  can now make requests using oauth2Client as the auth parameter!!
 
