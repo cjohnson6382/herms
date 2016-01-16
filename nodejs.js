@@ -93,12 +93,7 @@ function getHomeDirectory(auth) {
       console.log('Files not found');
     } else {
       console.log('Files: ');
-      var app = require('express')();
-      var options = {
-         key  : fs.readFileSync('server.enc.key'),
-         cert : fs.readFileSync('server.crt')
-      };
-      
+        
       var app = require('express')();
       var options = {
          key  : fs.readFileSync('server.enc.key'),
