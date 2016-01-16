@@ -6,6 +6,7 @@ var google = require('googleapis');
 var googleAuth = require('google-auth-library');
 
 var SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly'];
+//  TOKEN_DIR is where the access token is stored AFTER you get it
 var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE) + '/.credentials/';
 var TOKEN_PATH = TOKEN_DIR + 'drive-nodejs-quickstart.json';
 
@@ -21,6 +22,7 @@ fs.readFile('client_secret.json', function processClientSecret (err, content) {
   authorize(JSON.parse(content), getHomeDirectory);
 });
 
+//  the problem with this is that it uses google-auth-library to do something that googleapis can do on its own, which makes things more complicated than necessary
 function authorize(credentials, callback) {
   var clientSecret = credentials.web.client_secret;
   var clientId = credentials.web.client_id;

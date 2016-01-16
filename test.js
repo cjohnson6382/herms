@@ -1,66 +1,79 @@
 //  needed to get the client_secret.json which has the user credentials
 var fs = require('fs');
-
+var async = require('async');
+var https = require('https');
 var express = require('express');
 var app = express();
 
 //  this is how you get access to all of the google APIs; use it to do all the API calls
 var google = require('googleapis');
 
-//  OAuth with the googleapis npm
+//  OAuth with the googleapis npm; don't need the separate google auth NPM
 var OAuth2 = google.auth.OAuth2;
 
+var authorization_url;
+
+//  scopes will be used in actual API calls
 var scopes = [
+    'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/drive.appfolder',
     'https://www.googleapis.com/auth/drive.file'
 ];
 
-//  this is the url that you have to redirect the client to so that they can authorize the app
-//      I don't know how this works yet?
-var url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: scopes
-})
+var authDance = async.waterfall([
+    //  read the client_secret.json file, convert the JSON into a key/value array with parse, and then send it to authorize to do the actual authorization
+    function (callback) {
+        fs.readFile('client_secret.json', function (err, content) {
+            if (err === null) {
+                callback(null, JSON.parse(content));
+            } else { return }
+        })        
+    },
+    function (credentials, callback) {
+        var clientSecret = credentials.web.client_secret;
+        var clientId = credentials.web.client_id;
+        var redirectUrl = credentials.web.redirect_uris[0];
 
-//  at this point the app has requested an auth URL with the redirect; I need to create an endpoint for the redirect url
-//      and then all the code below can get the auth token and start doing shit
-
-app.get('/', function (req, res) {
-    res.send('<a href="/auth">DERP GOOGLE AUTH DERP</a>');
-})
-
-app.get('/auth', function (req, res) {
-    res.redirect(url);
-})
-
-app.get('/callback', function (req, res) {
-    console.log('code: ' + req.code);
-    console.log('req: ' + req);
-})
-
-/*
-//  read the client_secret.json file, convert the JSON into a key/value array with parse, and then send it to authorize to do the actual authorization
-fs.readFile('client_secret.json', function (err, content) {
+        var oauth2Client = new OAuth2(clientId, clientSecret, redirectUrl);
+        
+        callback(null, oauth2Client);
+    }  
+], function (err, oauth2Client) {
     if (err === null) {
-        authorize(JSON.parse(content), apiCalls);
-    } else { return }
+        authorization_url = oauth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: scopes
+        })
+        setupRoutes();
+    } else { console.log("err at waterfall function: " + err); }
 });
 
-//  assign the three necessasry OAuth things: id, secret, and redirect; and refresh key...
-function authorize (credentials, callback) {
-    var clientSecret = credentials.web.client_secret;
-    var clientId = credentials.web.client_id;
-    var redirectUrl = credentials.web.redirect_uris[0];
-    
-    var oauth2Client = new OAuth2(clientId, clientSecret, redirectUrl);
-    oauth2Client.getToken(code, function (err, tokens) {
-        if (!err) {
-            oauth2Client.setCredentials(tokens);
-        }
+var setupRoutes = async.parallel([
+    app.get('/', function (req, res) {
+        res.send('<a href="/auth">DERP GOOGLE AUTH DERP</a>');
+    }),
+    app.get('/auth', function (req, res) {
+        res.redirect(authorization_url);
+    }),
+    app.get('/callback', function (req, res) {
+        console.log('code: ' + req.code);
+        console.log('req: ' + req);
     })
-}
-*/
+], function (err, results) {
+    if (err !== null) {
+        console.log('err occurred in the async.parallel call: ' + err);
+    } else {
+        var options = {
+            key : fs.readFileSync('server.enc.key'),
+            cert: fs.readFileSync('server.crt')
+        }
+        https.createServer(options, app).listen(443, function () {
+            console.log('Server is started as HTTPS');
+        })
+    }
+})
+
 //  can now make requests using oauth2Client as the auth parameter!!
 
 /*
