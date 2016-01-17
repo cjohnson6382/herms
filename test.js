@@ -23,7 +23,7 @@ var scopes = [
 
 async.waterfall([
     function (callback) {
-        fs.readFile('client_secret.json', function (err, content) {
+        fs.readFile('client_secret_tv.json', function (err, content) {
             if (err === null) {
                 callback(null, JSON.parse(content));
             } else { 
@@ -54,8 +54,8 @@ async.waterfall([
             res.redirect(authorization_url);
         }),
         app.get('/callback', function (req, res) {
-            console.log('code: ' + req.code);
-            console.log('req: ' + req);
+            console.log(req.query.code);
+            res.send(req.query.code);
         })
         callback();
     },
