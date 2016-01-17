@@ -12,6 +12,7 @@ var google = require('googleapis');
 var OAuth2 = google.auth.OAuth2;
 
 var authorization_url;
+var oauth2Client;
 
 //  scopes will be used in actual API calls
 var scopes = [
@@ -20,6 +21,10 @@ var scopes = [
     'https://www.googleapis.com/auth/drive.appfolder',
     'https://www.googleapis.com/auth/drive.file'
 ];
+
+function storeKey (key) {
+    console.log('store the key!', key);
+}
 
 async.waterfall([
     function (callback) {
@@ -36,7 +41,7 @@ async.waterfall([
         var clientId = credentials.web.client_id;
         var redirectUrl = credentials.web.redirect_uris[0];
 
-        var oauth2Client = new OAuth2(clientId, clientSecret, redirectUrl);
+        oauth2Client = new OAuth2(clientId, clientSecret, redirectUrl);
         callback(null, oauth2Client);
     },
     function (oauth2Client, callback) {
@@ -54,13 +59,21 @@ async.waterfall([
             res.redirect(authorization_url);
         }),
         app.get('/callback', function (req, res) {
+            oauth2Client.getToken(code, function(err, token) {
+                if (err) {
+                    console.log('ERR while getting access token', err);
+                    return;
+                }
+                oauth2Client.credentials = token;   
+            })
             console.log(req.query.code);
             res.send(req.query.code);
         })
-        callback();
+        callback(oauth2Client);
     },
 ], function (err, result) {
     if (!err) {
+        storeKey(result);
         var options = {
             key : fs.readFileSync('server.enc.key'),
             cert: fs.readFileSync('server.crt')
