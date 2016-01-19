@@ -1,22 +1,25 @@
-<head>
-    <script type="text/javascript">
-        function authenticate () {
-            var xhr = new XMLHttpRequest();
-            var url = 'https://cjohnson.ignorelist.com:4343/auth';
-            
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState === 4 && xhr.status === 200) {
-                    sendMessage(xhr.responseText);
-                }
-            };
-            
-            xhr.open('GET', url, true);
-            xhr.send();
-            return true;
-        }
-    </script>
-</head>
+<head></head
 <body>
 <!-- the redirect needs to point the user to the index page (or the gmail page that the user is on?) -->
-    <div onclick=authenticate()>Authenticate with the Googles!</div>
+    <a href="https://cjohnson.ignorelist.com:4343/auth">Authenticate with the Googles!</a>
+    <br />
+    <button type='button' onclick=getFiles()>list some files from Drive after you authenticate</button>
+    <br />
+    <div id="emptyspace"></div>
 </body>
+<script>
+    function getFiles() {
+        var xhr = new XMLHttpRequest();
+        var url = 'https://cjohnson.ignorelist.com:4343/folder';
+        
+        
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status === 200) {
+                document.getElementById('emptyspace').innerHTML = xhr.responseText;
+            }
+        };
+        
+        xhr.open('GET', url, true);
+        xhr.send();
+    }
+</script>

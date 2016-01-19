@@ -49,8 +49,16 @@ async.waterfall([
     },
     function (authorization_url, callback) {
         app.get('/', function (req, res) {
-            res.send('<a href="/auth">DERP GOOGLE AUTH DERP</a>');
-        });
+            fs.readFile('html/index.html', function (err, content) {
+                if (err === null) {
+                    res.writeHead(200, {'Content-Type' : 'text/html'});
+                    console.log(content);
+                    res.end(content);
+                } else {
+                    console.log("ERR @ reading index.html", err);
+                }
+            })
+        })
         app.get('/auth', function (req, res) {
             res.redirect(authorization_url);
         });
@@ -63,7 +71,14 @@ async.waterfall([
             })
             console.log(req.query.code);
 //            res.send(req.query.code);
-            res.send('<a href="/folder">list some files from drive</a>');
+             fs.readFile('html/index.html', function (err, content) {
+                if (err === null) {
+                    res.writeHead(200, {'Content-Type' : 'text/html'});
+                    res.end(content);
+                } else {
+                    console.log("ERR @ reading index.html", err);
+                }
+            })
         });
         app.get('/folder', function (req, res) {
             var service = google.drive('v3');
