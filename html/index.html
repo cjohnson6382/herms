@@ -1,0 +1,22 @@
+<head>
+    <script type="text/javascript">
+        function authenticate () {
+            var xhr = new XMLHttpRequest();
+            var url = 'https://cjohnson.ignorelist.com:4343/auth';
+            
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    sendMessage(xhr.responseText);
+                }
+            };
+            
+            xhr.open('GET', url, true);
+            xhr.send();
+            return true;
+        }
+    </script>
+</head>
+<body>
+<!-- the redirect needs to point the user to the index page (or the gmail page that the user is on?) -->
+    <div onclick=authenticate()>Authenticate with the Googles!</div>
+</body>

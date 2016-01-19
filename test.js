@@ -10,6 +10,7 @@ var google = require('googleapis');
 
 //  OAuth with the googleapis npm; don't need the separate google auth NPM
 var OAuth2 = google.auth.OAuth2;
+var oauth2Client;
 
 var authorization_url;
 
@@ -36,7 +37,7 @@ async.waterfall([
         var clientId = credentials.web.client_id;
         var redirectUrl = credentials.web.redirect_uris[0];
 
-        var oauth2Client = new OAuth2(clientId, clientSecret, redirectUrl);
+        oauth2Client = new OAuth2(clientId, clientSecret, redirectUrl);
         callback(null, oauth2Client);
     },
     function (oauth2Client, callback) {
@@ -49,14 +50,56 @@ async.waterfall([
     function (authorization_url, callback) {
         app.get('/', function (req, res) {
             res.send('<a href="/auth">DERP GOOGLE AUTH DERP</a>');
-        }),
+        });
         app.get('/auth', function (req, res) {
             res.redirect(authorization_url);
-        }),
+        });
         app.get('/callback', function (req, res) {
+            oauth2Client.getToken(req.query.code, function (err, token) {
+                if (err) {
+                    console.log('ERR while getting access token', err);
+                }
+                oauth2Client.credentials = token
+            })
             console.log(req.query.code);
-            res.send(req.query.code);
-        })
+//            res.send(req.query.code);
+            res.send('<a href="/folder">list some files from drive</a>');
+        });
+        app.get('/folder', function (req, res) {
+            var service = google.drive('v3');
+            service.files.list({
+                auth: oauth2Client,
+                pageSize: 10,
+                fields: "nextPageToken, files(id, name)"
+            }, function(err, response) {
+                if (err) {
+                    console.log('The API returned an error: ' + err);
+                    return;
+                }
+                var files = response.files;
+                if (files.length == 0) {
+                    console.log('No files found.');
+                } else {
+                    var html = '<br />';
+                    for (var i = 0; i < files.length; i++) {
+                        var file = files[i];
+                        if (file !== null) {
+                           html += file.name + " " + file.id + "<br />"
+                        }
+                    }
+                    res.send(html);
+/*
+                    console.log('Files:');
+                    for (var i = 0; i < files.length; i++) {
+                        var file = files[i];
+                        console.log('%s (%s)', file.name, file.id);
+
+                    }
+*/
+                }
+            });
+        });
+
         callback();
     },
 ], function (err, result) {
