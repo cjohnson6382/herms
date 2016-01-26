@@ -80,7 +80,25 @@ async.waterfall([
                 }
             })
         });
-        app.get('/folder', function (req, res) {
+        app.get('/createfolder', function (req, res) {
+            var service = google.drive('v3');
+            var metadata = {
+                'name': 'testfolder',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'properties': {
+                    hermesis: true
+                }
+            };
+            result = service.files.create({
+                auth: oauth2Client,
+                resource: metadata,
+                fields: 'id'
+            })
+            res.send("The folder was created with ID", result);
+        });
+        //  need to change this to list files that the application has created when desired
+        //      some kind of flag, so this function can still be used to access the whole google drive for the user to 'upload' a contract from there
+        app.get('/listfiles', function (req, res) {
             var service = google.drive('v3');
             service.files.list({
                 auth: oauth2Client,
@@ -99,18 +117,10 @@ async.waterfall([
                     for (var i = 0; i < files.length; i++) {
                         var file = files[i];
                         if (file !== null) {
-                           html += file.name + " " + file.id + "<br />"
+                           html += file.name + "<br />"
                         }
                     }
                     res.send(html);
-/*
-                    console.log('Files:');
-                    for (var i = 0; i < files.length; i++) {
-                        var file = files[i];
-                        console.log('%s (%s)', file.name, file.id);
-
-                    }
-*/
                 }
             });
         });
