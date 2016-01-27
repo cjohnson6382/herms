@@ -3,7 +3,10 @@ var fs = require('fs');
 var async = require('async');
 var https = require('https');
 var express = require('express');
+var multer = require('multer');
+
 var app = express();
+var upload = multer({ dest: 'uploads/' });
 
 //  this is how you get access to all of the google APIs; use it to do all the API calls
 var google = require('googleapis');
@@ -96,6 +99,28 @@ async.waterfall([
             })
             res.send("The folder was created with ID", result);
         });
+        app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
+            var service = google.drive('v3');
+            var metadata = {
+                name: req.file.originalname,
+                description: 'this is just a sample upload',
+                properties: {
+                    hermesis: true
+                } 
+            };
+            
+            result = service.files.create({
+                auth: oauth2Client,
+                uploadType: 'multipart',
+                resource: metadata,
+                media: {
+                    mimeType: req.file.mimetype, 
+                    body: fs.createReadStream(req.file.path)
+                }
+            });
+            console.log(req.file);
+            res.end("file saved to Google Drive");
+        });
         //  need to change this to list files that the application has created when desired
         //      some kind of flag, so this function can still be used to access the whole google drive for the user to 'upload' a contract from there
         app.get('/listfiles', function (req, res) {
@@ -103,7 +128,8 @@ async.waterfall([
             service.files.list({
                 auth: oauth2Client,
                 pageSize: 10,
-                fields: "nextPageToken, files(id, name)"
+                fields: "nextPageToken, files(id, name)",
+                q: "properties has { key='hermesis' and value='true' }"
             }, function(err, response) {
                 if (err) {
                     console.log('The API returned an error: ' + err);

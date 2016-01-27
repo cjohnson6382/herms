@@ -13,43 +13,41 @@
 
 <script>
     function uploadFile () {
-            element = document.getElementById('emptyspace');
-            element.on('dragover', function(event){ 
-                var evt = document.createEvent('HTMLEvents');
-                evt.initEvent('drop', false, true);
-                document.dispatchEvent(evt);
-                event.stopPropagation();
-                event.preventDefault();
-                event.dataTransfer.dropEffect = 'copy';
-            });
-            element.on('drop', function(event){
-                event.stopPropagation();
-                event.preventDefault();
-                files = event.dataTransfer.files;
-            });
+        element = document.getElementById('emptyspace');
+        element.innerHTML = "<div style='width:100%;height:200px;text-align:center;border:1px dashed grey;'>DRAG AND DROP TO UPLOAD</div>";
+        element.addEventListener('dragover', function(event){ 
+            var evt = document.createEvent('HTMLEvents');
+            evt.initEvent('drop', false, true);
+            document.dispatchEvent(evt);
+            event.stopPropagation();
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'copy';
+        });
+        element.addEventListener('drop', function(event){
+            event.stopPropagation();
+            event.preventDefault();
 
-            var formData = FormData();
-            formData.append('file', files[0]);
-            formData.append('name', files[0].namej);
-            formData.append('length', files[0].size);
-            formData.append('type', files[0].type);            
+            files = event.dataTransfer.files;
 
+            var formData = new FormData();
+            formData.append('uploadedfile', files[0], files[0].name);
+            sendRequest(formData); 
+        });
+        function sendRequest(formData) {
             var xhr = new XMLHttpRequest();
             xhr.open('POST', 'https://cjohnson.ignorelist.com:4343/uploadfile');
-            xhr.onload(function ()  {
+            xhr.onload = function ()  {
                 if (xhr.status === 200) {
                     console.log(xhr.status);
                     document.getElementById('emptyspace').innerHTML = (xhr.responseText);
                 } else {
                     console.log('ERROR', xhr.status);
                 }
-            })
-
+            };
             xhr.send(formData);
+        }
     }
 
-    //  need to modify the apiCall function so that it can send parameters to the nodeJS backend
-    //      need to modify the backend so that it can read the parameters and upload the file
     function apiCall(endpoint, parameters) {
         var xhr = new XMLHttpRequest();
         
