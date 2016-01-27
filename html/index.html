@@ -27,13 +27,25 @@
                 event.preventDefault();
                 files = event.dataTransfer.files;
             });
-            var fileparameters = { 
-                file: files[0], 
-                name: files[0].name
-                length: files[0].size,
-                type: files[0].type
-            };
-            apiCall("https://cjohnson.ignorelist.com:4343/uploadfile", fileparameters) 
+
+            var formData = FormData();
+            formData.append('file', files[0]);
+            formData.append('name', files[0].namej);
+            formData.append('length', files[0].size);
+            formData.append('type', files[0].type);            
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', 'https://cjohnson.ignorelist.com:4343/uploadfile');
+            xhr.onload(function ()  {
+                if (xhr.status === 200) {
+                    console.log(xhr.status);
+                    document.getElementById('emptyspace').innerHTML = (xhr.responseText);
+                } else {
+                    console.log('ERROR', xhr.status);
+                }
+            })
+
+            xhr.send(formData);
     }
 
     //  need to modify the apiCall function so that it can send parameters to the nodeJS backend
