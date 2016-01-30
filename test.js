@@ -100,17 +100,11 @@ async.waterfall([
         });
         app.post('/downloadfile', upload.single('id'), function (req, res) {
             var fileid = req.body.id;
-            console.log("THIS IS THE FILEID THAT IS BEING USED WITH THE API CALL", fileid);
             var service = google.drive('v3');
-            console.log(fileid);
             result = service.files.get({
                 auth: oauth2Client,
                 fileId: fileid,
-                fields: "webContentlink",
-            }).on('end', function () {
-                
             });
-            console.log("SENDING TO CLIENT", result);
             res.end(result);
         })
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
