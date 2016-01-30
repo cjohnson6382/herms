@@ -29,7 +29,7 @@
 
     function downloadFile (event) {
         var formData = new FormData();
-        console.log(event);
+        console.log("The FileID:", event.target.id);
         formData.append('id', event.target.id);
         sendRequest(formData, 'POST', 'https://cjohnson.ignorelist.com:4343/downloadfile', function (xhr) {
             console.log(xhr.responseText);

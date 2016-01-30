@@ -105,7 +105,7 @@ async.waterfall([
                 auth: oauth2Client,
                 fileId: fileid,
             });
-            res.end(result);
+            res.end(result.webContentLink);
         })
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
             var service = google.drive('v3');
