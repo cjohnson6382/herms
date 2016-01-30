@@ -4,7 +4,6 @@ var async = require('async');
 var https = require('https');
 var express = require('express');
 var multer = require('multer');
-
 var app = express();
 var upload = multer({ dest: 'uploads/' });
 
@@ -24,6 +23,7 @@ var scopes = [
     'https://www.googleapis.com/auth/drive.appfolder',
     'https://www.googleapis.com/auth/drive.file'
 ];
+
 
 async.waterfall([
     function (callback) {
@@ -73,7 +73,6 @@ async.waterfall([
                 oauth2Client.credentials = token
             })
             console.log(req.query.code);
-//            res.send(req.query.code);
              fs.readFile('html/index.html', function (err, content) {
                 if (err === null) {
                     res.writeHead(200, {'Content-Type' : 'text/html'});
@@ -99,6 +98,22 @@ async.waterfall([
             })
             res.send("The folder was created with ID", result);
         });
+        app.post('/downloadfile', upload.single('id'), function (req, res) {
+            var fileid = req.body.id;
+            var service = google.drive('v3');
+            console.log(fileid);
+            result = service.files.get({
+                auth: oauth2Client,
+                fileId: fileid,
+                alt: 'media'
+            }).on('end', function () {
+                
+            });
+            //  API REQUEST IS NOT GETTING THE RIGHT FILE?
+            //  THE SERVER IS NOT RETURNING A FILE BECAUSE SEE THE GOOGLE NOTES FILE
+            console.log("SENDING TO CLIENT", result.name);
+            res.end("server has the file");
+        })
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
             var service = google.drive('v3');
             var metadata = {
@@ -143,7 +158,7 @@ async.waterfall([
                     for (var i = 0; i < files.length; i++) {
                         var file = files[i];
                         if (file !== null) {
-                           html += file.name + "<br />"
+                           html += "<div id=" + file.id  + " onclick='downloadFile(event)'>" + file.name + "</div><br />"
                         }
                     }
                     res.send(html);
@@ -164,37 +179,3 @@ async.waterfall([
         })
     }
 });
-
-//  can now make requests using oauth2Client as the auth parameter!!
-
-/*
-
-//  variable is using the google drive API, v3
-var drive = google.drive('v3');
-
-//  this is where you put the parameters for any call you make; just like in the Ruby demo
-var params = {};
-
-//  an actual API call
-drive.files.create({
-    auth: oauth2Client, // include with every API call
-    
-});
-
-
-var fileMetadata = {
-  'name' : 'Contract Templates',
-  'mimeType' : 'application/vnd.google-apps.folder'
-};
-drive.files.create({
-   resource: fileMetadata,
-   fields: 'id'
-}, function(err, file) {
-  if(err) {
-    // Handle error
-    console.log(err);
-  } else {
-    console.log('Folder Id: ', file.id);
-  }
-});
-*/

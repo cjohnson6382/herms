@@ -12,39 +12,26 @@
     <div id="emptyspace"></div>
 
 <script>
-    function sendRequest(formData, method, endpoint, fileflag, callback) {
+    function sendRequest(formData, method, endpoint, callback) {
         var xhr = new XMLHttpRequest();
         xhr.open(method, endpoint);
-        filesent = false;
         xhr.onload = function ()  {
-            if (xhr.status === 200 && filesent === false) {
-                if (fileflag === true) {
-                    console.log(blob);
-                    var blob = new Blob([ xhr.response ], { type : xhr.response.type });
-                    callback(blob);
-                } else {
-                    callback(xhr);
-                }
-                filesent = true;
-            } else if (xhr.status !== 200) {
+            if (xhr.status === 200) {
+                callback(xhr);
+            } else {
                 console.log('ERROR', xhr.status);
             }
         };
-        if (fileflag === true) {
-            xhr.responseType = 'blob';
-        }
         xhr.send(formData);
     }
 
-    function downloadFile (event) {
+    function downloadFile (id) {
         var formData = new FormData();
-        console.log(event);
-        formData.append('id', event.target.id);
+        formData.append('id', id);
         sendRequest(formData, 'POST', 'https://cjohnson.ignorelist.com:4343/downloadfile', function (xhr) {
-            console.log(xhr.responseText);
+            window.open(xhr.responseText);
         });
     }
-
     function uploadFile () {
         element = document.getElementById('emptyspace');
         element.innerHTML = "<div style='width:100%;height:200px;text-align:center;border:1px dashed grey;'>DRAG AND DROP TO UPLOAD</div>";
