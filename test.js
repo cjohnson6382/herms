@@ -105,14 +105,12 @@ async.waterfall([
             result = service.files.get({
                 auth: oauth2Client,
                 fileId: fileid,
-                alt: 'media'
+                fields: "webContentlink",
             }).on('end', function () {
                 
             });
-            //  API REQUEST IS NOT GETTING THE RIGHT FILE?
-            //  THE SERVER IS NOT RETURNING A FILE BECAUSE SEE THE GOOGLE NOTES FILE
-            console.log("SENDING TO CLIENT", result.name);
-            res.end("server has the file");
+            console.log("SENDING TO CLIENT", result);
+            res.end(result);
         })
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
             var service = google.drive('v3');

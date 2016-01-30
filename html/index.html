@@ -12,27 +12,18 @@
     <div id="emptyspace"></div>
 
 <script>
-    function sendRequest(formData, method, endpoint, fileflag, callback) {
+    function sendRequest(formData, method, endpoint, callback) {
+        var filesent = false;
         var xhr = new XMLHttpRequest();
         xhr.open(method, endpoint);
-        filesent = false;
         xhr.onload = function ()  {
             if (xhr.status === 200 && filesent === false) {
-                if (fileflag === true) {
-                    console.log(blob);
-                    var blob = new Blob([ xhr.response ], { type : xhr.response.type });
-                    callback(blob);
-                } else {
-                    callback(xhr);
-                }
+                callback(xhr.responseText);
                 filesent = true;
             } else if (xhr.status !== 200) {
                 console.log('ERROR', xhr.status);
             }
         };
-        if (fileflag === true) {
-            xhr.responseType = 'blob';
-        }
         xhr.send(formData);
     }
 
