@@ -18,7 +18,7 @@
         xhr.open(method, endpoint);
         xhr.onload = function ()  {
             if (xhr.status === 200 && filesent === false) {
-                callback(xhr.responseText);
+                callback(xhr);
                 filesent = true;
             } else if (xhr.status !== 200) {
                 console.log('ERROR', xhr.status);
@@ -29,7 +29,6 @@
 
     function downloadFile (event) {
         var formData = new FormData();
-        console.log("The FileID:", event.target.id);
         formData.append('id', event.target.id);
         sendRequest(formData, 'POST', 'https://cjohnson.ignorelist.com:4343/downloadfile', function (xhr) {
             console.log(xhr.responseText);

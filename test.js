@@ -104,10 +104,10 @@ async.waterfall([
             result = service.files.get({
                 auth: oauth2Client,
                 fileId: fileid,
-            }).on('end', function () {
-                console.log(this.body);
-            });
-            res.end("server is giving you nothing");
+                fields: "webContentLink"
+            }, function (err, response) {
+                res.end(response.webContentLink);
+            })
         })
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
             var service = google.drive('v3');
