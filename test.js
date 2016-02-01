@@ -62,9 +62,11 @@ async.waterfall([
                 }
             })
         })
+//	the extension needs to call auth from a window external to the gmail page, because the user is redirected to the auth page
         app.get('/auth', function (req, res) {
             res.redirect(authorization_url);
         });
+//	callback should send a message to the window that auth is completed and that it's okay for the window to close
         app.get('/callback', function (req, res) {
             oauth2Client.getToken(req.query.code, function (err, token) {
                 if (err) {
@@ -73,14 +75,16 @@ async.waterfall([
                 oauth2Client.credentials = token
             })
             console.log(req.query.code);
-             fs.readFile('html/index.html', function (err, content) {
-                if (err === null) {
-                    res.writeHead(200, {'Content-Type' : 'text/html'});
-                    res.end(content);
-                } else {
-                    console.log("ERR @ reading index.html", err);
-                }
-            })
+//	don't need to serve the user a new version of index.html; that's what's causing reloads
+            res.end("authentication complete");
+//            fs.readFile('html/index.html', function (err, content) {
+//                if (err === null) {
+//                    res.writeHead(200, {'Content-Type' : 'text/html'});
+//                    res.end(content);
+//                } else {
+//                    console.log("ERR @ reading index.html", err);
+//                }
+//            })
         });
         app.get('/createfolder', function (req, res) {
             var service = google.drive('v3');

@@ -1,6 +1,7 @@
 <body>
 <!-- the redirect needs to point the user to the index page (or the gmail page that the user is on?) -->
-    <a href="https://cjohnson.ignorelist.com:4343/auth">Authenticate with the Googles!</a>
+<!--    <a href="https://cjohnson.ignorelist.com:4343/auth">Authenticate with the Googles!</a> -->
+    <button type='button' id="authenticate" onclick=authPage()>Authenticate</button>
     <br />
     <button type='button' id="listfiles" onclick=apiCall("https://cjohnson.ignorelist.com:4343/listfiles")>list some files</button>
     <br />
@@ -12,6 +13,14 @@
     <div id="emptyspace"></div>
 
 <script>
+    function authPage () {
+        authUrl = "https://cjohnson.ignorelist.com:4343/auth";
+        iframe = document.createElement('iframe');
+        iframe.src = authUrl;
+        iframe.style = 'visbility:hidden;display:none';
+        document.getElementById('emptyspace').append(iframe);
+    }
+
     function sendRequest(formData, method, endpoint, callback) {
         var filesent = false;
         var xhr = new XMLHttpRequest();
