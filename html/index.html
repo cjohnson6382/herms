@@ -3,7 +3,9 @@
 <!--    <a href="https://cjohnson.ignorelist.com:4343/auth">Authenticate with the Googles!</a> -->
     <button type='button' id="authenticate" onclick=authPage()>Authenticate</button>
     <br />
-    <button type='button' id="listfiles" onclick=apiCall("https://cjohnson.ignorelist.com:4343/listfiles")>list some files</button>
+    <br />
+    <br />
+    <button type='button' id="listfiles" onclick=listfiles()>list some files</button>
     <br />
     <button type='button' id="createfolder" onclick=apiCall("https://cjohnson.ignorelist.com:4343/createfolder")>make a new folder on drive</button>
     <br />
@@ -12,13 +14,27 @@
     <br />
     <div id="emptyspace"></div>
 
+    <br />
+    <br />
+    <br />
+
 <script>
     function authPage () {
-        authUrl = "https://cjohnson.ignorelist.com:4343/auth";
-        iframe = document.createElement('iframe');
-        iframe.src = authUrl;
-        iframe.style = 'visbility:hidden;display:none';
-        document.getElementById('emptyspace').append(iframe);
+        var xhr = new XMLHttpRequest();
+        var authUrl = "https://cjohnson.ignorelist.com:4343/auth";
+        xhr.open('GET', authUrl);
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                authUrl = xhr.responseText;
+                authwindow = window.open(authUrl, "authentication");
+                setInterval(function () {
+                    if (authwindow.location.pathname === '/callback') {
+                        authwindow.close();   
+                    }
+                }, 100); 
+            } else { console.log('ERROR during auth, before redirect URL', xhr.status);  }
+        }
+        xhr.send();
     }
 
     function sendRequest(formData, method, endpoint, callback) {
@@ -69,13 +85,28 @@
             }); 
         });
     }
+    
+    function listfiles( {
+        var endpoint = "https://cjohnson.ignorelist.com:4343/listfiles";
+        //  files is a list of files
+        files = apiCall(endpoint);
+        //  formatted files is a block of HTML to display in the emptybox div
+        //      each file listed, when clicked, will try to open in google docs)
+        var formatted_files = "<div>";
+        for (var i = 0; i < files.length; i++) {
+            var temp_html = "<div id=" + files[i].id + "onclick=googleDocOpen(event)>" + files[i].name + "</div><br />";
+            formatted_files += temp_html;
+        }
+        format_files += "</div";
+        document.getElementById(emptyspace).innerHTML = formatted_files;
+    })
 
     function apiCall(endpoint, parameters) {
         var xhr = new XMLHttpRequest();
         
         xhr.onreadystatechange = function () {
             if (xhr.readyState === 4 && xhr.status === 200) {
-                document.getElementById('emptyspace').innerHTML = xhr.responseText;
+                return xhr.responseText;
             }
         };
         

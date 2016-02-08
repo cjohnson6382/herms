@@ -21,7 +21,8 @@ var scopes = [
     'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/drive.appfolder',
-    'https://www.googleapis.com/auth/drive.file'
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/gmail.readonly',
 ];
 
 
@@ -55,18 +56,16 @@ async.waterfall([
             fs.readFile('html/index.html', function (err, content) {
                 if (err === null) {
                     res.writeHead(200, {'Content-Type' : 'text/html'});
-                    console.log(content);
                     res.end(content);
                 } else {
                     console.log("ERR @ reading index.html", err);
                 }
             })
         })
-//	the extension needs to call auth from a window external to the gmail page, because the user is redirected to the auth page
         app.get('/auth', function (req, res) {
-            res.redirect(authorization_url);
+            res.writeHead(200, {'Access-Control-Allow-Origin' : '*'});
+            res.end(authorization_url);
         });
-//	callback should send a message to the window that auth is completed and that it's okay for the window to close
         app.get('/callback', function (req, res) {
             oauth2Client.getToken(req.query.code, function (err, token) {
                 if (err) {
@@ -74,17 +73,7 @@ async.waterfall([
                 }
                 oauth2Client.credentials = token
             })
-            console.log(req.query.code);
-//	don't need to serve the user a new version of index.html; that's what's causing reloads
             res.end("authentication complete");
-//            fs.readFile('html/index.html', function (err, content) {
-//                if (err === null) {
-//                    res.writeHead(200, {'Content-Type' : 'text/html'});
-//                    res.end(content);
-//                } else {
-//                    console.log("ERR @ reading index.html", err);
-//                }
-//            })
         });
         app.get('/createfolder', function (req, res) {
             var service = google.drive('v3');
@@ -152,15 +141,9 @@ async.waterfall([
                 var files = response.files;
                 if (files.length == 0) {
                     console.log('No files found.');
-                } else {
-                    var html = '<br />';
-                    for (var i = 0; i < files.length; i++) {
-                        var file = files[i];
-                        if (file !== null) {
-                           html += "<div id=" + file.id  + " onclick='downloadFile(event)'>" + file.name + "</div><br />"
-                        }
-                    }
-                    res.send(html);
+                } 
+                else {
+                    res.send(response.files);
                 }
             });
         });
