@@ -7,7 +7,7 @@
     <br />
     <button type='button' id="listfiles" onclick=listfiles()>list some files</button>
     <br />
-    <button type='button' id="createfolder" onclick=apiCall("https://cjohnson.ignorelist.com:4343/createfolder")>make a new folder on drive</button>
+    <button type='button' id="createfolder" onclick=apiCall("https://cjohnson.ignorelist.com:4343/createfolder", {})>make a new folder on drive</button>
     <br />
     <button type='button' id="uploadfile" onclick=uploadFile()>upload a file</button>
     <br />
@@ -86,30 +86,33 @@
         });
     }
     
-    function listfiles( {
+    function listfiles() {
         var endpoint = "https://cjohnson.ignorelist.com:4343/listfiles";
         //  files is a list of files
-        files = apiCall(endpoint);
+        var files;
+        apiCall(endpoint, {}, function (response) {
+            files = JSON.parse(response);
+            var formatted_files = "<div>";
+            for (var i = 0; i < files.length; i++) {
+                var temp_html = "<div id=" + files[i].id + " onclick=downloadFile(event)>" + files[i].name + "</div><br />";
+                formatted_files += temp_html;
+            }
+            formatted_files += "</div";
+            document.getElementById('emptyspace').innerHTML = formatted_files;
+        });
         //  formatted files is a block of HTML to display in the emptybox div
         //      each file listed, when clicked, will try to open in google docs)
-        var formatted_files = "<div>";
-        for (var i = 0; i < files.length; i++) {
-            var temp_html = "<div id=" + files[i].id + "onclick=googleDocOpen(event)>" + files[i].name + "</div><br />";
-            formatted_files += temp_html;
-        }
-        format_files += "</div";
-        document.getElementById(emptyspace).innerHTML = formatted_files;
-    })
+            }
 
-    function apiCall(endpoint, parameters) {
+    function apiCall(endpoint, parameters, callback) {
         var xhr = new XMLHttpRequest();
-        
         xhr.onreadystatechange = function () {
             if (xhr.readyState === 4 && xhr.status === 200) {
-                return xhr.responseText;
+                callback(xhr.responseText);
             }
         };
-        
+        //   encode parameters onto endpoint
+ 
         xhr.open('GET', endpoint, true);
         xhr.send();
     }

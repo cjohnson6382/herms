@@ -23,6 +23,7 @@ var scopes = [
     'https://www.googleapis.com/auth/drive.appfolder',
     'https://www.googleapis.com/auth/drive.file',
     'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/drive.appdata'
 ];
 
 
@@ -101,6 +102,63 @@ async.waterfall([
             }, function (err, response) {
                 res.end(response.webContentLink);
             })
+        })
+        app.post('/savemetadata', function (req, res) {
+            var service = google.drive('v3');
+            var JSONlocation;
+
+            fields = req.metadataitems;
+            docid = req.docid;
+
+
+//  FIX ME FIX ME FIX ME
+//  HOW DO I TURN JSON VARIABLE INTO A FILE TO SAVE
+            var fileMetadata = {
+                name: /* THE NAME OF THE FILE -- TIMESTAMP */,
+                parents: [ 'appDataFolder' ]
+            }
+
+            var media = {
+                mimeType: 'application/json',
+                //  FIX ME FIX ME FIX ME
+                body: fs.createReadStream(/*THE FILE*/ )
+            }
+
+            service.files.create({
+                auth: oauth2Client,
+                resource: fileMetadata,
+                media: media,
+                fields: 'id'
+            }, function (err, file) {
+                if (err) {
+                    console.log('error creating JSON for file| file: ', docid, " err: ", err);
+                } else {
+                    JSONlocation = file.id;
+                }
+            })
+
+            //  make a JSON app data entry for this file that has all the information about the fields
+            //      and where to find it and all that
+
+            //  the metadata needs to include properties that show where the JSON file is
+            //      and a timestamp to show when the file was last modified by this script
+            //          if the file's last edit was after this script's last edit, it means
+            //          the user has modified the document without using the template creator
+
+            var metadata = {
+                properties: {
+                    fields: JSONlocation,
+                    hermesis: true
+                }    
+            }
+
+            result = service.files.update({
+                auth: oauth2Client,
+                resource: metadata,
+                fileId: docid,
+                resource: metadata
+            })
+
         })
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
             var service = google.drive('v3');
