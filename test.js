@@ -6,6 +6,7 @@ var express = require('express');
 var multer = require('multer');
 var app = express();
 var upload = multer({ dest: 'uploads/' });
+var readable = require('stream').Readable;
 
 //  this is how you get access to all of the google APIs; use it to do all the API calls
 var google = require('googleapis');
@@ -106,50 +107,53 @@ async.waterfall([
         app.post('/savemetadata', function (req, res) {
             var service = google.drive('v3');
             var JSONlocation;
+            var lastmodified;
+            var rs = new Readable;
 
-            fields = req.metadataitems;
+            //  the first part of this deals with the JSON file
+            fields = JSON.parse(req.metadataitems); //  docid is the id of the PARENT document
             docid = req.docid;
 
+            //  I don't think this is in JSON format yet; should probably make it so
+            rs.push(JSON.stringify({parentid: docid, fields: fields}));
 
-//  FIX ME FIX ME FIX ME
-//  HOW DO I TURN JSON VARIABLE INTO A FILE TO SAVE
+            timestamp = Date.now();
+            filename = docid + " -- hermesis template -- " + timestamp + ".json";
+
             var fileMetadata = {
-                name: /* THE NAME OF THE FILE -- TIMESTAMP */,
+                name: filename,
                 parents: [ 'appDataFolder' ]
             }
 
             var media = {
                 mimeType: 'application/json',
-                //  FIX ME FIX ME FIX ME
-                body: fs.createReadStream(/*THE FILE*/ )
+                body: rs
             }
 
+            //  this creates the JSON file
             service.files.create({
                 auth: oauth2Client,
                 resource: fileMetadata,
                 media: media,
-                fields: 'id'
+                fields: 'id, modifiedByMeDate'
             }, function (err, file) {
                 if (err) {
                     console.log('error creating JSON for file| file: ', docid, " err: ", err);
                 } else {
                     JSONlocation = file.id;
+                    lastmodified = file.modifiedByMeDate;  
                 }
             })
 
-            //  make a JSON app data entry for this file that has all the information about the fields
-            //      and where to find it and all that
-
-            //  the metadata needs to include properties that show where the JSON file is
-            //      and a timestamp to show when the file was last modified by this script
-            //          if the file's last edit was after this script's last edit, it means
-            //          the user has modified the document without using the template creator
-
+            //  from here down we're just adding the JSON file's id to the template
+            //  when the template is selected, check whether the json and template 'last modified'
+            //      dates are the same; if not, then need to parse the template for fields again
             var metadata = {
                 properties: {
                     fields: JSONlocation,
+                    jsonlastedit: lastmodified,
                     hermesis: true
-                }    
+                } 
             }
 
             result = service.files.update({
@@ -159,12 +163,14 @@ async.waterfall([
                 resource: metadata
             })
 
+            res.end(result);
+
         })
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
             var service = google.drive('v3');
             var metadata = {
                 name: req.file.originalname,
-                description: 'this is just a sample upload',
+                description: 'upload a file that the user selects on an upload dialog',
                 properties: {
                     hermesis: true
                 } 
