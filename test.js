@@ -2,12 +2,15 @@
 var fs = require('fs');
 var async = require('async');
 var https = require('https');
+var httprequest = require('request');
 var express = require('express');
 var multer = require('multer');
 var app = express();
 var upload = multer({ dest: 'uploads/' });
-var readable = require('stream').Readable;
+var stream = require('stream');
+var bodyParser = require('body-parser');
 
+var urlencodedParser = bodyParser.urlencoded({ extended: false });
 //  this is how you get access to all of the google APIs; use it to do all the API calls
 var google = require('googleapis');
 
@@ -16,15 +19,14 @@ var OAuth2 = google.auth.OAuth2;
 var oauth2Client;
 
 var authorization_url;
+var config_folder;
 
 //  scopes will be used in actual API calls
 var scopes = [
-    'https://www.googleapis.com/auth/drive.readonly',
-    'https://www.googleapis.com/auth/drive.readonly',
-    'https://www.googleapis.com/auth/drive.appfolder',
+    'https://www.googleapis.com/auth/drive.appdata',
     'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.metadata',
     'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/drive.appdata'
 ];
 
 
@@ -83,7 +85,7 @@ async.waterfall([
                 'name': 'testfolder',
                 'mimeType': 'application/vnd.google-apps.folder',
                 'properties': {
-                    hermesis: true
+                    hermesis_folder: true
                 }
             };
             result = service.files.create({
@@ -104,25 +106,28 @@ async.waterfall([
                 res.end(response.webContentLink);
             })
         })
-        app.post('/savemetadata', function (req, res) {
+        app.post('', upload.single(), function () {
+
+        })
+        app.post('/savemetadata', urlencodedParser, function (req, res) {
             var service = google.drive('v3');
             var JSONlocation;
             var lastmodified;
-            var rs = new Readable;
 
-            //  the first part of this deals with the JSON file
-            fields = JSON.parse(req.metadataitems); //  docid is the id of the PARENT document
-            docid = req.docid;
+            fields = JSON.parse(req.body.metadataitems);
+            docid = req.body.docid;
 
-            //  I don't think this is in JSON format yet; should probably make it so
-            rs.push(JSON.stringify({parentid: docid, fields: fields}));
+            var rs = JSON.stringify({parentid: docid, fields: fields});
+            timestamp = new Date();
 
-            timestamp = Date.now();
-            filename = docid + " -- hermesis template -- " + timestamp + ".json";
+            filename = docid + " -- hermesis template -- " + timestamp.toString() + ".json";
 
             var fileMetadata = {
                 name: filename,
-                parents: [ 'appDataFolder' ]
+//                parents: ['appDataFolder'],
+                properties: {
+                    hermesis_config: true,
+                }
             }
 
             var media = {
@@ -135,36 +140,63 @@ async.waterfall([
                 auth: oauth2Client,
                 resource: fileMetadata,
                 media: media,
-                fields: 'id, modifiedByMeDate'
+                uploadType: 'multipart',
+                fields: 'id, modifiedByMeTime, parents, name, fileExtension'
             }, function (err, file) {
                 if (err) {
                     console.log('error creating JSON for file| file: ', docid, " err: ", err);
                 } else {
+                    console.log('successfully executed a drive call ', file.id);
                     JSONlocation = file.id;
-                    lastmodified = file.modifiedByMeDate;  
+                    lastmodified = file.modifiedByMeTime;
+
+                    var metadata = {
+                       properties: {
+                           fields: JSONlocation,
+                           jsonlastedit: lastmodified,
+                           hermesis_template: true
+                       } 
+                   }
+
+                   service.files.update({
+                       auth: oauth2Client,
+                       resource: metadata,
+                       fileId: docid
+                   }, function (err, file) {
+                       if (err) {
+                           console.log("error updating metadata", err);
+                       } else {
+                           console.log("successfully updated metadata: ", file.id);
+                           res.end(file.id);
+                       }
+                   })
                 }
             })
-
-            //  from here down we're just adding the JSON file's id to the template
-            //  when the template is selected, check whether the json and template 'last modified'
-            //      dates are the same; if not, then need to parse the template for fields again
-            var metadata = {
-                properties: {
-                    fields: JSONlocation,
-                    jsonlastedit: lastmodified,
-                    hermesis: true
-                } 
-            }
-
-            result = service.files.update({
+        })
+        app.post('/getfields', upload.single(), function (req, res) {
+            var service = google.drive('v3');
+            service.files.get({
                 auth: oauth2Client,
-                resource: metadata,
-                fileId: docid,
-                resource: metadata
+                fileId: req.body.id,
+                fields: "properties(fields)"
+            }, function (err, file) {
+                if (err) {
+                    console.log("error getting the JSON file from drive: ", err); 
+                } else {
+                    service.files.get({
+                        auth: oauth2Client,
+                        alt: 'media',
+                        fileId: file.properties.fields,
+                        fields: 'id'
+                    }, function (err, file) {
+                        if (err) {
+                            console.log(err);
+                        } else {
+                            res.end(JSON.stringify(file.fields));
+                        }
+                    }); 
+                }
             })
-
-            res.end(result);
-
         })
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
             var service = google.drive('v3');
@@ -172,11 +204,11 @@ async.waterfall([
                 name: req.file.originalname,
                 description: 'upload a file that the user selects on an upload dialog',
                 properties: {
-                    hermesis: true
+                    hermesis_template: true
                 } 
             };
             
-            result = service.files.create({
+            service.files.create({
                 auth: oauth2Client,
                 uploadType: 'multipart',
                 resource: metadata,
@@ -196,7 +228,7 @@ async.waterfall([
                 auth: oauth2Client,
                 pageSize: 10,
                 fields: "nextPageToken, files(id, name)",
-                q: "properties has { key='hermesis' and value='true' }"
+                q: "properties has { key='hermesis_template' and value='true'} "
             }, function(err, response) {
                 if (err) {
                     console.log('The API returned an error: ' + err);
@@ -207,6 +239,7 @@ async.waterfall([
                     console.log('No files found.');
                 } 
                 else {
+                    console.log("sending the following response: ", response.files);
                     res.send(response.files);
                 }
             });

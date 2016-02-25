@@ -12,6 +12,9 @@
     <button type='button' id="uploadfile" onclick=uploadFile()>upload a file</button>
     <br />
     <br />
+<!--    <button type='button' id="getfields" onclick=getFields()>Get a document's template fields</button> -->
+    <br />
+    <br />
     <div id="emptyspace"></div>
 
     <br />
@@ -35,6 +38,15 @@
             } else { console.log('ERROR during auth, before redirect URL', xhr.status);  }
         }
         xhr.send();
+    }
+
+    function getFields (event) {
+        var formData = new FormData();
+        formData.append('id', event.target.id);
+        sendRequest(formData, 'POST', 'https://cjohnson.ignorelist.com:4343/getfields', function (xhr) {
+            console.log(JSON.parse(xhr.responseText));
+            document.getElementById('emptyspace').innerHTML = JSON.parse(xhr.responseText);
+        });
     }
 
     function sendRequest(formData, method, endpoint, callback) {
@@ -94,7 +106,7 @@
             files = JSON.parse(response);
             var formatted_files = "<div>";
             for (var i = 0; i < files.length; i++) {
-                var temp_html = "<div id=" + files[i].id + " onclick=downloadFile(event)>" + files[i].name + "</div><br />";
+                var temp_html = "<div id=" + files[i].id + " onclick=getFields(event)>" + files[i].name + "</div><br />";
                 formatted_files += temp_html;
             }
             formatted_files += "</div";
