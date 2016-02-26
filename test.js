@@ -21,6 +21,8 @@ var oauth2Client;
 var authorization_url;
 var config_folder;
 
+var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
+
 //  scopes will be used in actual API calls
 var scopes = [
     'https://www.googleapis.com/auth/drive.appdata',
@@ -106,7 +108,38 @@ async.waterfall([
                 res.end(response.webContentLink);
             })
         })
-        app.post('', upload.single(), function () {
+        app.post('getfilledtemplate', upload.single(), function (req, res) {
+            var service = google.drive('v3');
+            var script = google.script('v1');
+            var fields = req.body.fields;
+
+            service.files.get({
+                auth: oauth2Client,
+                fileId: req.body.id,
+                fields: "id"
+            }, function (err, file) {
+                if (err) {
+                    console.log("error getting the file from drive: ", err); 
+                } else {
+                //  execute doc commands to substitute text on the file
+                    script.scripts.run({
+                        auth: oauth2Client,
+                        scriptId: API_SCRIPT_EXECUTION_PROJECT_ID,
+                        resource: {
+                           function: 'getDocument' 
+                        }
+                    }, function (err, resp) {
+                        if (err) {
+                            console.log("error using the app script execution api: ", err);    
+                        } else {
+                            console.log("resp to script call: ", resp); 
+                        }
+                    });
+                //  export the file as PDF
+    
+                //  return the file
+               }
+            })
 
         })
         app.post('/savemetadata', urlencodedParser, function (req, res) {
