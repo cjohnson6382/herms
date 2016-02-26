@@ -23,12 +23,12 @@ var config_folder;
 
 var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
 
-//  scopes will be used in actual API calls
 var scopes = [
     'https://www.googleapis.com/auth/drive.appdata',
     'https://www.googleapis.com/auth/drive.file',
     'https://www.googleapis.com/auth/drive.metadata',
     'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/documents'
 ];
 
 
@@ -67,7 +67,7 @@ async.waterfall([
                     console.log("ERR @ reading index.html", err);
                 }
             })
-        })
+        });
         app.get('/auth', function (req, res) {
             res.writeHead(200, {'Access-Control-Allow-Origin' : '*'});
             res.end(authorization_url);
@@ -107,8 +107,8 @@ async.waterfall([
             }, function (err, response) {
                 res.end(response.webContentLink);
             })
-        })
-        app.post('getfilledtemplate', upload.single(), function (req, res) {
+        });
+        app.post('/getfilledtemplate', upload.single(), function (req, res) {
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
@@ -126,12 +126,14 @@ async.waterfall([
                         auth: oauth2Client,
                         scriptId: API_SCRIPT_EXECUTION_PROJECT_ID,
                         resource: {
-                           function: 'getDocument' 
+                           function: 'getDocument',
+                           parameters: [file.id, fields]
                         }
                     }, function (err, resp) {
                         if (err) {
                             console.log("error using the app script execution api: ", err);    
                         } else {
+                            // this section needs to be greatly expanded
                             console.log("resp to script call: ", resp); 
                         }
                     });
@@ -141,7 +143,7 @@ async.waterfall([
                }
             })
 
-        })
+        });
         app.post('/savemetadata', urlencodedParser, function (req, res) {
             var service = google.drive('v3');
             var JSONlocation;
@@ -205,7 +207,7 @@ async.waterfall([
                    })
                 }
             })
-        })
+        });
         app.post('/getfields', upload.single(), function (req, res) {
             var service = google.drive('v3');
             service.files.get({
@@ -230,7 +232,7 @@ async.waterfall([
                     }); 
                 }
             })
-        })
+        });
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
             var service = google.drive('v3');
             var metadata = {
