@@ -23,6 +23,9 @@ var config_folder;
 
 var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
 
+//  fix me fix me fix me !!!!
+var TEMP_FOLDER = "placeholder for the temp folder's id";
+
 var scopes = [
     'https://www.googleapis.com/auth/drive.appdata',
     'https://www.googleapis.com/auth/drive.file',
@@ -112,38 +115,74 @@ async.waterfall([
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
-
-            service.files.get({
+            
+            var tempfile_title = "temp copy " + new Date() + "  " + fileId;
+            
+            function fillinCopy (fileId, callback) {
+                service.files.get({
+                    auth: oauth2Client,
+                    fileId: fileId,
+                    fields: "id"
+                }, function (err, file) {
+                    if (err) {
+                        console.log("error getting the file from drive: ", err); 
+                    } else {
+                    //  execute doc commands to substitute text on the file
+                        script.scripts.run({
+                            auth: oauth2Client,
+                            scriptId: API_SCRIPT_EXECUTION_PROJECT_ID,
+                            resource: {
+                               function: 'getDocument',
+                               parameters: [file.id, fields]
+                            }
+                        }, function (err, resp) {
+                            if (err) {
+                                console.log("error using the app script execution api: ", err);    
+                            } else {
+                                console.log("resp to script call: ", resp); 
+                                callback(resp);
+                            }
+                        });
+                    }
+                });
+            }
+            
+            function getpdf (fileId, callback) {
+                service.files.export({
+                    auth: oauth2Client,
+                    fileId: fileId,
+                    mimeType: "application/pdf"
+                }, function (err, fileresource) {
+                    callback(fileresource); 
+                }); 
+            }
+            
+            
+            //  copy the template file into a temp directory
+            service.files.copy({
                 auth: oauth2Client,
-                fileId: req.body.id,
+                fielId: req.body.id,
                 fields: "id"
-            }, function (err, file) {
-                if (err) {
-                    console.log("error getting the file from drive: ", err); 
-                } else {
-                //  execute doc commands to substitute text on the file
-                    script.scripts.run({
-                        auth: oauth2Client,
-                        scriptId: API_SCRIPT_EXECUTION_PROJECT_ID,
-                        resource: {
-                           function: 'getDocument',
-                           parameters: [file.id, fields]
-                        }
-                    }, function (err, resp) {
-                        if (err) {
-                            console.log("error using the app script execution api: ", err);    
-                        } else {
-                            // this section needs to be greatly expanded
-                            console.log("resp to script call: ", resp); 
-                        }
+                resource: {
+                    title: tempfile_title,
+                    description: "copy of a template file for app use; do not modify",
+                    parents: TEMP_FOLDER
+                }, function (err, file) {
+                    fillinCopy(file.id, function (copyId) {
+                        //  return the PDF to the extension to be attached to the email
+                        getpdf(copyId, function (pdf){
+                            res.type('application/pdf');
+                            res.end(pdf, 'binary');
+                        });
                     });
-                //  export the file as PDF
-    
-                //  return the file
-               }
-            })
-
+                })
+            });
         });
+        /* app.get('/sent', function (req, res) {}) */
+            //  when the email is sent/discarded, return teh appropriate message to the server
+            
+            //  if sent -> archive; if discarded -> delete
+        
         app.post('/savemetadata', urlencodedParser, function (req, res) {
             var service = google.drive('v3');
             var JSONlocation;
