@@ -162,12 +162,12 @@ async.waterfall([
             service.files.copy({
                 auth: oauth2Client,
                 fielId: req.body.id,
-                fields: "id"
+                fields: "id",
                 resource: {
                     title: tempfile_title,
                     description: "copy of a template file for app use; do not modify",
                     parents: TEMP_FOLDER
-                }, function (err, file) {
+                }}, function (err, file) {
                     fillinCopy(file.id, function (copyId) {
                         //  return the PDF to the extension to be attached to the email
                         getpdf(copyId, function (pdf){
@@ -175,8 +175,8 @@ async.waterfall([
                             res.end(pdf, 'binary');
                         });
                     });
-                })
-            });
+                }
+            );
         });
         /* app.get('/sent', function (req, res) {}) */
             //  when the email is sent/discarded, return teh appropriate message to the server
