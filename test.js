@@ -35,6 +35,69 @@ var scopes = [
 ];
 
 
+function getTempFolder (callback) {
+    var service = google.drive('v3');
+    var query = 'properties has { key="hermesis_folder" and value="true" } and mimeType="application/vnd.google-apps.folder" and name="temp"';
+    service.files.list({
+        auth: oauth2Client,
+        q: query,
+        fields: 'files/id'
+    }, function (err, folderlist) {
+        if (err) {
+            console.log('could not get the temp folder', err);
+            callback("error");
+        } else {
+            console.log("folderlist: ", folderlist.files);
+            callback(folderlist.files[0].id);
+        }   
+    }); 
+};
+
+function createTempFolder (callback) {
+    var service = google.drive('v3');
+    var metadata = { 
+        'name': 'temp',
+        'mimeType': 'application/vnd.google-apps.folder',
+        'properties': {
+            hermesis_folder: true
+        }   
+    };  
+    service.files.create({
+        auth: oauth2Client,
+        resource: metadata,
+        fields: 'id'
+    }, function (err, folder) {
+        if (err) {
+            console.log('error creating temp folder: ', err);
+        } else {
+            TEMP_FOLDER = folder.id;
+        }   
+    }); 
+};
+
+/*
+function exportFileIdToPdf (id, callback) {
+    service = google.drive('v3');
+    var tempfilename = id + " -- " + Date.now() + ".pdf";
+    var dest = fs.createWriteStream('/temp/' + tempfilename);
+                                                                                                                  
+    service.files.export({
+        fileId: id, 
+        mimeType: 'application/pdf'
+    })  
+    .on('end', function () {
+        console.log('done writing PDF to temp file');
+    })  
+    .on('error', function (err) {
+        console.log('error writing PDF to temp file: ', err);
+    })  
+    .pipe(dest);
+
+    callback(dest);
+};
+*/
+
+
 async.waterfall([
     function (callback) {
         fs.readFile('client_secret_tv.json', function (err, content) {
@@ -81,6 +144,16 @@ async.waterfall([
                     console.log('ERR while getting access token', err);
                 }
                 oauth2Client.credentials = token
+
+                getTempFolder(function (folderId) {
+                    TEMP_FOLDER = folderId;
+                    if (TEMP_FOLDER === 'error') {
+                        createTempFolder(function (folderId) {
+                            TEMP_FOLDER = folderId;
+                            return;
+                        });
+                    } else { return; };
+                });
             })
             res.end("authentication complete");
         });
@@ -115,8 +188,8 @@ async.waterfall([
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
-            
-            var tempfile_title = "temp copy " + new Date() + "  " + fileId;
+            console.log('req.body.fields is a string right now; has to be JSON');
+            var tempfile_title = "temp copy " + new Date() + "  " + req.body.id;
             
             function fillinCopy (fileId, callback) {
                 service.files.get({
@@ -127,7 +200,7 @@ async.waterfall([
                     if (err) {
                         console.log("error getting the file from drive: ", err); 
                     } else {
-                    //  execute doc commands to substitute text on the file
+                        //  execute doc commands to substitute text on the file
                         script.scripts.run({
                             auth: oauth2Client,
                             scriptId: API_SCRIPT_EXECUTION_PROJECT_ID,
@@ -140,7 +213,7 @@ async.waterfall([
                                 console.log("error using the app script execution api: ", err);    
                             } else {
                                 console.log("resp to script call: ", resp); 
-                                callback(resp);
+                                callback(resp.response.result);
                             }
                         });
                     }
@@ -153,22 +226,30 @@ async.waterfall([
                     fileId: fileId,
                     mimeType: "application/pdf"
                 }, function (err, fileresource) {
-                    callback(fileresource); 
+                    if (err) {
+                        console.log("error exporting to PDF: " + err);
+                    } else {
+                        callback(fileresource); 
+                    }
                 }); 
             }
-            
             
             //  copy the template file into a temp directory
             service.files.copy({
                 auth: oauth2Client,
-                fielId: req.body.id,
+                fileId: req.body.id,
                 fields: "id",
                 resource: {
                     title: tempfile_title,
                     description: "copy of a template file for app use; do not modify",
                     parents: TEMP_FOLDER
                 }}, function (err, file) {
+                    if (err) {
+                        console.log("error copying the template file: " + err);
+                    }
+                    console.log("this is the template copy: ", file);
                     fillinCopy(file.id, function (copyId) {
+                        console.log("id of the copy, before getpdf: " + copyId);
                         //  return the PDF to the extension to be attached to the email
                         getpdf(copyId, function (pdf){
                             res.type('application/pdf');
@@ -313,7 +394,6 @@ async.waterfall([
                     console.log('No files found.');
                 } 
                 else {
-                    console.log("sending the following response: ", response.files);
                     res.send(response.files);
                 }
             });
