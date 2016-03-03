@@ -75,13 +75,14 @@ function createTempFolder (callback) {
     }); 
 };
 
-/*
 function exportFileIdToPdf (id, callback) {
     service = google.drive('v3');
-    var tempfilename = id + " -- " + Date.now() + ".pdf";
-    var dest = fs.createWriteStream('/temp/' + tempfilename);
-                                                                                                                  
+    var tempfilename = 'temp/' + id + "-" + Date.now() + ".pdf";
+    var dest = fs.createWriteStream(tempfilename);
+    console.log("dest path and filename: " + tempfilename);
+
     service.files.export({
+        auth: oauth2Client,
         fileId: id, 
         mimeType: 'application/pdf'
     })  
@@ -93,9 +94,8 @@ function exportFileIdToPdf (id, callback) {
     })  
     .pipe(dest);
 
-    callback(dest);
+    callback(tempfilename);
 };
-*/
 
 
 async.waterfall([
@@ -220,20 +220,46 @@ async.waterfall([
                 });
             }
             
+            
+/*                    
             function getpdf (fileId, callback) {
+                //  var exportmimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                var exportmimeType = 'application/pdf';
                 service.files.export({
                     auth: oauth2Client,
                     fileId: fileId,
-                    mimeType: "application/pdf"
+                    mimeType: exportmimeType
                 }, function (err, fileresource) {
                     if (err) {
                         console.log("error exporting to PDF: " + err);
                     } else {
-                        callback(fileresource); 
+                        //  all this is debugging shit
+                        console.log(fileresource.constructor, typeof fileresource);
+                        service.files.create({
+                            auth: oauth2Client,
+                            uploadType: 'multipart',
+                            fields: 'id',
+                            resource: {
+                                name: "test pdf",
+                                parents: [TEMP_FOLDER]
+                            },
+                            media: {
+                                mimeType: exportmimeType,
+                                body: fileresource
+                            }
+                        }, function (err, resp) {
+                            if (err) {
+                                console.log("derp derp derp: ", err);
+                            } else {
+                                console.log("this is your stupid PDF: ", resp);
+                            }
+                        });
+                        //  end debugging shit
+                        callback(fileresource, exportmimeType); 
                     }
                 }); 
             }
-            
+  */          
             //  copy the template file into a temp directory
             service.files.copy({
                 auth: oauth2Client,
@@ -242,19 +268,31 @@ async.waterfall([
                 resource: {
                     title: tempfile_title,
                     description: "copy of a template file for app use; do not modify",
-                    parents: TEMP_FOLDER
+                    parents: [TEMP_FOLDER]
                 }}, function (err, file) {
                     if (err) {
                         console.log("error copying the template file: " + err);
                     }
-                    console.log("this is the template copy: ", file);
+                    console.log("\nthis is the template copy: ", file);
                     fillinCopy(file.id, function (copyId) {
-                        console.log("id of the copy, before getpdf: " + copyId);
+                        console.log("\nid of the copy, before getpdf: " + copyId);
                         //  return the PDF to the extension to be attached to the email
-                        getpdf(copyId, function (pdf){
-                            res.type('application/pdf');
-                            res.end(pdf, 'binary');
+                        exportFileIdToPdf(copyId, function (fileLocation) {
+                            console.log('\nfileLocation: ', fileLocation);
+                            res.download(fileLocation, 'stupidfile.pdf', function (err) {
+                                if (err) {
+                                    console.log('error sending download: ' + err);
+                                } else {
+                                    console.log('file successfully sent');
+                                }
+                            }); 
                         });
+/*
+                        getpdf(copyId, function (doc, mime){
+                            res.type(mime);
+                            res.end(doc, 'binary');
+                        });
+*/
                     });
                 }
             );
