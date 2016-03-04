@@ -2,12 +2,12 @@
 var fs = require('fs');
 var async = require('async');
 var https = require('https');
-var httprequest = require('request');
+//  var httprequest = require('request');
 var express = require('express');
 var multer = require('multer');
 var app = express();
 var upload = multer({ dest: 'uploads/' });
-var stream = require('stream');
+//  var stream = require('stream');
 var bodyParser = require('body-parser');
 
 var urlencodedParser = bodyParser.urlencoded({ extended: false });
@@ -19,7 +19,7 @@ var OAuth2 = google.auth.OAuth2;
 var oauth2Client;
 
 var authorization_url;
-var config_folder;
+// var config_folder;
 
 var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
 
@@ -51,7 +51,7 @@ function getTempFolder (callback) {
             callback(folderlist.files[0].id);
         }   
     }); 
-};
+}
 
 function createTempFolder (callback) {
     var service = google.drive('v3');
@@ -73,10 +73,10 @@ function createTempFolder (callback) {
             TEMP_FOLDER = folder.id;
         }   
     }); 
-};
+}
 
 function exportFileIdToPdf (id, callback) {
-    service = google.drive('v3');
+    var service = google.drive('v3');
     var tempfilename = 'temp/' + id + "-" + Date.now() + ".pdf";
     var dest = fs.createWriteStream(tempfilename);
     console.log("dest path and filename: " + tempfilename);
@@ -95,7 +95,7 @@ function exportFileIdToPdf (id, callback) {
     .pipe(dest);
 
     callback(tempfilename);
-};
+}
 
 
 async.waterfall([
@@ -104,9 +104,9 @@ async.waterfall([
             if (err === null) {
                 callback(null, JSON.parse(content));
             } else { 
-                return 
+                return;
             }
-        })        
+        });    
     },
     function (credentials, callback) {
         var clientSecret = credentials.web.client_secret;
@@ -120,7 +120,7 @@ async.waterfall([
         authorization_url = oauth2Client.generateAuthUrl({
                 access_type: 'offline',
                 scope: scopes
-            })
+            });
         callback(null, authorization_url);
     },
     function (authorization_url, callback) {
@@ -132,7 +132,7 @@ async.waterfall([
                 } else {
                     console.log("ERR @ reading index.html", err);
                 }
-            })
+            });
         });
         app.get('/auth', function (req, res) {
             res.writeHead(200, {'Access-Control-Allow-Origin' : '*'});
@@ -143,7 +143,7 @@ async.waterfall([
                 if (err) {
                     console.log('ERR while getting access token', err);
                 }
-                oauth2Client.credentials = token
+                oauth2Client.credentials = token;
 
                 getTempFolder(function (folderId) {
                     TEMP_FOLDER = folderId;
@@ -152,9 +152,9 @@ async.waterfall([
                             TEMP_FOLDER = folderId;
                             return;
                         });
-                    } else { return; };
+                    } else { return; }
                 });
-            })
+            });
             res.end("authentication complete");
         });
         app.get('/createfolder', function (req, res) {
@@ -166,28 +166,33 @@ async.waterfall([
                     hermesis_folder: true
                 }
             };
-            result = service.files.create({
+            var result = service.files.create({
                 auth: oauth2Client,
                 resource: metadata,
                 fields: 'id'
-            })
+            });
             res.send("The folder was created with ID", result);
         });
         app.post('/downloadfile', upload.single('id'), function (req, res) {
             var fileid = req.body.id;
             var service = google.drive('v3');
-            result = service.files.get({
+            service.files.get({
                 auth: oauth2Client,
                 fileId: fileid,
                 fields: "webContentLink"
             }, function (err, response) {
-                res.end(response.webContentLink);
-            })
+                if (err) {
+                    console.log("error downloading from Drive: ", err);        
+                } else {
+                    res.end(response.webContentLink);
+                }
+            });
         });
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
+            //  fix me fix me fix me
             console.log('req.body.fields is a string right now; has to be JSON');
             var tempfile_title = "temp copy " + new Date() + "  " + req.body.id;
             
@@ -220,46 +225,7 @@ async.waterfall([
                 });
             }
             
-            
-/*                    
-            function getpdf (fileId, callback) {
-                //  var exportmimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-                var exportmimeType = 'application/pdf';
-                service.files.export({
-                    auth: oauth2Client,
-                    fileId: fileId,
-                    mimeType: exportmimeType
-                }, function (err, fileresource) {
-                    if (err) {
-                        console.log("error exporting to PDF: " + err);
-                    } else {
-                        //  all this is debugging shit
-                        console.log(fileresource.constructor, typeof fileresource);
-                        service.files.create({
-                            auth: oauth2Client,
-                            uploadType: 'multipart',
-                            fields: 'id',
-                            resource: {
-                                name: "test pdf",
-                                parents: [TEMP_FOLDER]
-                            },
-                            media: {
-                                mimeType: exportmimeType,
-                                body: fileresource
-                            }
-                        }, function (err, resp) {
-                            if (err) {
-                                console.log("derp derp derp: ", err);
-                            } else {
-                                console.log("this is your stupid PDF: ", resp);
-                            }
-                        });
-                        //  end debugging shit
-                        callback(fileresource, exportmimeType); 
-                    }
-                }); 
-            }
-  */          
+             
             //  copy the template file into a temp directory
             service.files.copy({
                 auth: oauth2Client,
