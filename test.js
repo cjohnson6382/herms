@@ -191,9 +191,10 @@ async.waterfall([
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
             var service = google.drive('v3');
             var script = google.script('v1');
-            var fields = req.body.fields;
+            var fields = JSON.parse(req.body.fields);
+            console.log("fields should be an array now; might need to be JSON to go to the API script execution: ", fields);
             //  fix me fix me fix me
-            console.log('req.body.fields is a string right now; has to be JSON');
+            console.log('req.body.fields is a string right now; has to be JSON: ', fields, fields.constructor);
             var tempfile_title = "temp copy " + new Date() + "  " + req.body.id;
             
             function fillinCopy (fileId, callback) {
