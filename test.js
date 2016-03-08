@@ -34,6 +34,37 @@ var scopes = [
     'https://www.googleapis.com/auth/documents'
 ];
 
+/////////////////////////////////////
+class SessionObject {
+    //  the data object is a json of the necessary variables
+    constructor (data) {
+        this.sessionId = data.sessionId;
+        this.originalId = data.originalId;
+        this.copyId = data.copyId;
+        this.pdfpath = data.pdfpath;
+    }
+    
+    function setOriginalId (id) {
+        this.originalId = id;
+    } 
+
+    function setCopyId (id) {
+        this.copyId = id;
+    } 
+
+    function setPdfPath (path) {
+        this.pdfpath = path;
+    }
+}
+
+//  open the db or create it if it doesn't exist
+
+//  function to insert sessions into the db
+function sessionDataInsert (db, session) {
+    //  db.insert for (key in Object.keys(session)) { db.insert(session.sessionId, key: session[key] };
+}
+
+//////////////////////////////////////
 
 function getTempFolder (callback) {
     var service = google.drive('v3');
