@@ -88,13 +88,12 @@ function exportFileIdToPdf (id, callback) {
     })  
     .on('end', function () {
         console.log('done writing PDF to temp file');
+        callback(tempfilename);
     })  
     .on('error', function (err) {
         console.log('error writing PDF to temp file: ', err);
     })  
     .pipe(dest);
-
-    callback(tempfilename);
 }
 
 
@@ -191,10 +190,8 @@ async.waterfall([
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
             var service = google.drive('v3');
             var script = google.script('v1');
-            var fields = JSON.parse(req.body.fields);
-            console.log("fields should be an array now; might need to be JSON to go to the API script execution: ", fields);
-            //  fix me fix me fix me
-            console.log('req.body.fields is a string right now; has to be JSON: ', fields, fields.constructor);
+            var fields = req.body.fields;
+            var result = res;
             var tempfile_title = "temp copy " + new Date() + "  " + req.body.id;
             
             function fillinCopy (fileId, callback) {
@@ -225,7 +222,6 @@ async.waterfall([
                     }
                 });
             }
-            
              
             //  copy the template file into a temp directory
             service.files.copy({
@@ -240,26 +236,18 @@ async.waterfall([
                     if (err) {
                         console.log("error copying the template file: " + err);
                     }
-                    console.log("\nthis is the template copy: ", file);
                     fillinCopy(file.id, function (copyId) {
-                        console.log("\nid of the copy, before getpdf: " + copyId);
                         //  return the PDF to the extension to be attached to the email
                         exportFileIdToPdf(copyId, function (fileLocation) {
                             console.log('\nfileLocation: ', fileLocation);
-                            res.download(fileLocation, 'stupidfile.pdf', function (err) {
+                            result.download(fileLocation, 'stupidfile.pdf', function (err) {
                                 if (err) {
                                     console.log('error sending download: ' + err);
                                 } else {
-                                    console.log('file successfully sent');
+                                    console.log('file successfully sent', res.headersSent);
                                 }
                             }); 
                         });
-/*
-                        getpdf(copyId, function (doc, mime){
-                            res.type(mime);
-                            res.end(doc, 'binary');
-                        });
-*/
                     });
                 }
             );
