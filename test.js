@@ -13,6 +13,8 @@ var bodyParser = require('body-parser');
 var urlencodedParser = bodyParser.urlencoded({ extended: false });
 //  this is how you get access to all of the google APIs; use it to do all the API calls
 var google = require('googleapis');
+var mongo = require('mongodb');
+
 
 //  OAuth with the googleapis npm; don't need the separate google auth NPM
 var OAuth2 = google.auth.OAuth2;
@@ -35,29 +37,56 @@ var scopes = [
 ];
 
 /////////////////////////////////////
-class SessionObject {
+function SessionObject (data) {
     //  the data object is a json of the necessary variables
-    constructor (data) {
-        this.sessionId = data.sessionId;
-        this.originalId = data.originalId;
-        this.copyId = data.copyId;
-        this.pdfpath = data.pdfpath;
-    }
+
+    this.sessionId = data.sessionId;
+    this.originalId = data.originalId;
+    this.copyId = data.copyId;
+    this.pdfpath = data.pdfpath;
+
+    this.setOriginalId = function (id) {
+        this.originalId = id; 
+    };
     
-    function setOriginalId (id) {
-        this.originalId = id;
-    } 
-
-    function setCopyId (id) {
+    this.setCopyId = function (id) {
         this.copyId = id;
-    } 
-
-    function setPdfPath (path) {
+    };
+    
+    this.setPdfPath = function (path) {
         this.pdfpath = path;
-    }
+    };
 }
 
+function createMongoDb () {
+    
+}
+
+function initializeMongoDb () {
+    var client = mongo.MongoClient;
+    var url = 'mongodb://localhost:27017/session_db';
+    client.connect(url, function (err, db) {
+        if (err) { 
+            console.log("error connecting to the DB: ", err); 
+        } else {
+            db = db;
+        }
+    });
+    if (db !== undefined) {
+        throw "DB doesn't exist";
+    }  
+}
+
+//  the handle for operating the database; gets defined below
+var db;
 //  open the db or create it if it doesn't exist
+
+try {
+    db = initializeMongoDb(); 
+} catch (e) {
+    db = createMongoDb();
+}
+
 
 //  function to insert sessions into the db
 function sessionDataInsert (db, session) {
