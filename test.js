@@ -37,13 +37,17 @@ var scopes = [
 ];
 
 /////////////////////////////////////
-function generateSessionId (data, callback) {
-    var hash = crypto.createHash('md5');  
+function generateSessionId (callback) {
+    var hash = crypto.createHash('md5');
+    //  hashing the date to create a 'unique' value - so bad; 
+    //      this should:
+    //          get a unique identifier from the DB and return that
+    data = new Date.now();  
     hash.on('readable', () => {
-        var data = hash.read();
-        if (data) {
+        var hashed = hash.read();
+        if (hashed) {
             console.log('hashed your data', data, data.toString());
-            callback(data.toString('utf8'));
+            callback(hashed.toString('utf8'));
         }
     });
     hash.write(data);
@@ -52,9 +56,11 @@ function generateSessionId (data, callback) {
 
 function SessionObject (data) {
     //  the data object is a json of the necessary variables
-    var data = data;
 
-    generateSessionId(data, function (generatedId) {
+    //  this is for the optimistic scenario where you get all
+    //      the data that you need in one shot; otherwise it creates
+    //      an empty SessionObject
+    generateSessionId(function (generatedId) {
         this.sessionId = generatedId;
         this.originalId = data.originalId;
         this.copyId = data.copyId;
@@ -101,17 +107,36 @@ var dbCaller = (function () {
             }       
         },
 //
-        sessionInsert: function (session, callback) {
-            if (COLLECTION) {
-                COLLECTION.insert({session.sessionId: session});
-                callback();
-            } else {
-                this.initializeDb(this.sessionInsert(session));
+        checkWhetherInitialized: function (callback) {
+            try {
+                if (!COLLECTION) { 
+                    throw 'COLLECTION not set' 
+                } else { callback() }
+            } catch (e) {
+                console.log(e);
+                this.initializeDb(callback);
             }
+        },
+//  in addition to having an insert, should have an update
+//      for when you are just completing the SessionObject
+        sessionUpdate: function () {
+            //  update an existing db entry
+
+        }, 
+        sessionInsert: function (session, callback) {
+            checkWhetherInitialized(function () {
+                COLLECTION.insert({
+                    sessionId: session.sessionId, 
+                    originalId: session.originalId,
+                    copyId: session.copyId,
+                    pdfpath: session.pdfpath
+                });
+                callback();
+            });
         },
 //
         sessionRetrieve: function (sessionId, callback) {
-            if (COLLECTION) {
+            checkWhetherInitialized(function () {
                 COLLECTION.findOne(sessionId, function (err, item) {
                     if (err) {
                         console.log("error retrieving session from DB: ", sessionId, err);
@@ -119,9 +144,14 @@ var dbCaller = (function () {
                         callback(item);
                     }
                 });
-            } else {
-                this.initializeDb(this.sessionRetrieve(session));
             }
+        },
+//
+        expireSession: function (sessionId, callback) {
+            checkWhetherInitialized(function () {
+                //  there is no column named sessionId; need to do that
+                COLLECTION.deleteOne({sessionId: sessionId}, );
+            })
         }      
     }
 })();
