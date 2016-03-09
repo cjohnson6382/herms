@@ -14,7 +14,7 @@ var urlencodedParser = bodyParser.urlencoded({ extended: false });
 //  this is how you get access to all of the google APIs; use it to do all the API calls
 var google = require('googleapis');
 var mongo = require('mongodb');
-
+var crypto = require('crypto');
 
 //  OAuth with the googleapis npm; don't need the separate google auth NPM
 var OAuth2 = google.auth.OAuth2;
@@ -37,13 +37,29 @@ var scopes = [
 ];
 
 /////////////////////////////////////
+function generateSessionId (data, callback) {
+    var hash = crypto.createHash('md5');  
+    hash.on('readable', () => {
+        var data = hash.read();
+        if (data) {
+            console.log('hashed your data', data, data.toString());
+            callback(data.toString('utf8'));
+        }
+    });
+    hash.write(data);
+    hash.end();
+}
+
 function SessionObject (data) {
     //  the data object is a json of the necessary variables
+    var data = data;
 
-    this.sessionId = data.sessionId;
-    this.originalId = data.originalId;
-    this.copyId = data.copyId;
-    this.pdfpath = data.pdfpath;
+    generateSessionId(data, function (generatedId) {
+        this.sessionId = generatedId;
+        this.originalId = data.originalId;
+        this.copyId = data.copyId;
+        this.pdfpath = data.pdfpath;
+    });
 
     this.setOriginalId = function (id) {
         this.originalId = id; 
@@ -58,40 +74,58 @@ function SessionObject (data) {
     };
 }
 
-function createMongoDb () {
-    
-}
 
-function initializeMongoDb () {
-    var client = mongo.MongoClient;
-    var url = 'mongodb://localhost:27017/session_db';
-    client.connect(url, function (err, db) {
-        if (err) { 
-            console.log("error connecting to the DB: ", err); 
-        } else {
-            db = db;
-        }
-    });
-    if (db !== undefined) {
-        throw "DB doesn't exist";
-    }  
-}
+//  MAKE SURE TO CREATE THE DB**************************************
+var dbCaller = (function () {
+    var COLLECTION;
 
-//  the handle for operating the database; gets defined below
-var db;
-//  open the db or create it if it doesn't exist
+    return {
+        initializeDb: function (callback) {
+            var db;
+            try {
+                var client = mongo.MongoClient;
+                var url = 'mongodb://localhost:27017/session_db';
+                client.connect(url, function (err, db) {
+                    if (err) { 
+                        console.log("error connecting to the DB: ", err); 
+                        throw err;
+                    } else {
+                         db.createCollection('session_data', function (err, collection) {
+                            COLLECTION = collection;
+                            callback();
+                         })
+                    }
+                });
+            } catch (e) {
+                console.log('cannot initialize the DB: ', err);
+            }       
+        },
+//
+        sessionInsert: function (session, callback) {
+            if (COLLECTION) {
+                COLLECTION.insert({session.sessionId: session});
+                callback();
+            } else {
+                this.initializeDb(this.sessionInsert(session));
+            }
+        },
+//
+        sessionRetrieve: function (sessionId, callback) {
+            if (COLLECTION) {
+                COLLECTION.findOne(sessionId, function (err, item) {
+                    if (err) {
+                        console.log("error retrieving session from DB: ", sessionId, err);
+                    } else {
+                        callback(item);
+                    }
+                });
+            } else {
+                this.initializeDb(this.sessionRetrieve(session));
+            }
+        }      
+    }
+})();
 
-try {
-    db = initializeMongoDb(); 
-} catch (e) {
-    db = createMongoDb();
-}
-
-
-//  function to insert sessions into the db
-function sessionDataInsert (db, session) {
-    //  db.insert for (key in Object.keys(session)) { db.insert(session.sessionId, key: session[key] };
-}
 
 //////////////////////////////////////
 
