@@ -65,6 +65,7 @@ function SessionObject (data) {
         this.originalId = data.originalId;
         this.copyId = data.copyId;
         this.pdfpath = data.pdfpath;
+        this.tempfolderId = data.tempfolderId;
     });
 
     this.setOriginalId = function (id) {
@@ -77,6 +78,10 @@ function SessionObject (data) {
     
     this.setPdfPath = function (path) {
         this.pdfpath = path;
+    };
+    
+    this.setTempfolderId = function (id) {
+        this.tempfolderId = id;
     };
 }
 
@@ -315,8 +320,26 @@ async.waterfall([
                     console.log('ERR while getting access token', err);
                 }
                 oauth2Client.credentials = token;
+               
+                //  create a session and return it so that the user gets their session token when auth completes
+                //  var session = new SessionObject();
 
                 getTempFolder(function (folderId) {
+                    //  THERE SHOULD BE NO TEMP_FOLDER GLOBAL; SHOULD BE IN SESSION INFO
+                    /*
+                    //  is this the right place to create the session object?
+                    dbCaller.sessionRetrieve(session, function (sessionobject) {
+                        if (folderId === 'error') {
+                            createTempFolder(function (newfolderId) {
+                                sessionobject.setTempfolderId(newfolderId);
+                            });
+                            return;
+                        } else {
+                            sessionobject.setTempfolderId(folderId);
+                            return;
+                        }
+                    });
+                    */
                     TEMP_FOLDER = folderId;
                     if (TEMP_FOLDER === 'error') {
                         createTempFolder(function (folderId) {
@@ -327,6 +350,7 @@ async.waterfall([
                 });
             });
             res.end("authentication complete");
+            //  res.end(session);
         });
         app.get('/createfolder', function (req, res) {
             var service = google.drive('v3');
@@ -360,6 +384,10 @@ async.waterfall([
             });
         });
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
+            //  session = req.body.session;
+            //  execute doc commands to substitute text on the file
+            //  session.setOriginalId(req.body.id);
+            //  dbCaller.getAndSet(session.sessionId, session);
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
@@ -375,7 +403,6 @@ async.waterfall([
                     if (err) {
                         console.log("error getting the file from drive: ", err); 
                     } else {
-                        //  execute doc commands to substitute text on the file
                         script.scripts.run({
                             auth: oauth2Client,
                             scriptId: API_SCRIPT_EXECUTION_PROJECT_ID,
@@ -408,9 +435,13 @@ async.waterfall([
                     if (err) {
                         console.log("error copying the template file: " + err);
                     }
+                    //  session.setCopyId(file.id);
+                    //  db.caller.getAndSet(session.sessionId, session);
                     fillinCopy(file.id, function (copyId) {
                         //  return the PDF to the extension to be attached to the email
                         exportFileIdToPdf(copyId, function (fileLocation) {
+                            //  session.setPdfPath(fileLocation);
+                            //  dbCaller.getAndSet(session.sessionId, session);
                             console.log('\nfileLocation: ', fileLocation);
                             result.download(fileLocation, 'stupidfile.pdf', function (err) {
                                 if (err) {
@@ -434,13 +465,13 @@ async.waterfall([
             var JSONlocation;
             var lastmodified;
 
-            fields = JSON.parse(req.body.metadataitems);
-            docid = req.body.docid;
+            var fields = JSON.parse(req.body.metadataitems);
+            var docid = req.body.docid;
 
             var rs = JSON.stringify({parentid: docid, fields: fields});
-            timestamp = new Date();
+            var timestamp = new Date();
 
-            filename = docid + " -- hermesis template -- " + timestamp.toString() + ".json";
+            var filename = docid + " -- hermesis template -- " + timestamp.toString() + ".json";
 
             var fileMetadata = {
                 name: filename,
@@ -448,12 +479,12 @@ async.waterfall([
                 properties: {
                     hermesis_config: true,
                 }
-            }
+            };
 
             var media = {
                 mimeType: 'application/json',
                 body: rs
-            }
+            };
 
             //  this creates the JSON file
             service.files.create({
