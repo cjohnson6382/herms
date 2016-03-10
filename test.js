@@ -42,7 +42,7 @@ function generateSessionId (callback) {
     //  hashing the date to create a 'unique' value - so bad; 
     //      this should:
     //          get a unique identifier from the DB and return that
-    data = new Date.now();  
+    var data = new Date.now();  
     hash.on('readable', () => {
         var hashed = hash.read();
         if (hashed) {
@@ -84,10 +84,10 @@ function SessionObject (data) {
 //  MAKE SURE TO CREATE THE DB**************************************
 var dbCaller = (function () {
     var COLLECTION;
-
+    var DB;
+    
     return {
         initializeDb: function (callback) {
-            var db;
             try {
                 var client = mongo.MongoClient;
                 var url = 'mongodb://localhost:27017/session_db';
@@ -96,14 +96,19 @@ var dbCaller = (function () {
                         console.log("error connecting to the DB: ", err); 
                         throw err;
                     } else {
-                         db.createCollection('session_data', function (err, collection) {
-                            COLLECTION = collection;
-                            callback();
-                         })
+                        DB = db;
+                        DB.createCollection('session_data', function (err, collection) {
+                            if (err) { 
+                                console.log("error initializing DB: ", err); 
+                            } else {
+                                COLLECTION = collection;
+                                callback();
+                            }
+                        });
                     }
                 });
             } catch (e) {
-                console.log('cannot initialize the DB: ', err);
+                console.log('cannot initialize the DB: ', e);
             }       
         },
 //
@@ -119,46 +124,87 @@ var dbCaller = (function () {
         },
 //  in addition to having an insert, should have an update
 //      for when you are just completing the SessionObject
-        sessionUpdate: function () {
+        sessionUpdate: function (session, callback) {
             //  update an existing db entry
-
+            this.checkWhetherInitialized(function () {
+                var filter = {sessionId: session.sessionId};
+                var data = { $set: {sessionId: session.sessionId, session: session} };
+                COLLECTION.updateOne(filter, data, {upsert: true}, function (err, results) {
+                    if (err) {
+                        console.log("error updating DB: ", err)
+                    } else {
+                        console.log("updated ${sessionId} with new data: ${session}; result is (1 is good): ${results.result.ok}");
+                        callback();
+                    }
+                });
+            });
         }, 
+/*
         sessionInsert: function (session, callback) {
             checkWhetherInitialized(function () {
                 COLLECTION.insert({
                     sessionId: session.sessionId, 
-                    originalId: session.originalId,
-                    copyId: session.copyId,
-                    pdfpath: session.pdfpath
+                    session: session
                 });
                 callback();
             });
         },
+*/
 //
-        sessionRetrieve: function (sessionId, callback) {
-            checkWhetherInitialized(function () {
-                COLLECTION.findOne(sessionId, function (err, item) {
+        sessionRetrieve: function (session, callback) {
+            this.checkWhetherInitialized(function () {
+                COLLECTION.findOne(session.sessionId, function (err, item) {
                     if (err) {
-                        console.log("error retrieving session from DB: ", sessionId, err);
+                        console.log("error retrieving session from DB: ", session.sessionId, err);
                     } else {
-                        callback(item);
+                        callback(item.session);
                     }
                 });
+            });
+        },
+//
+        expireSession: function (session, callback) {
+            this.checkWhetherInitialized(function () {
+                //  there is no column named sessionId; need to do that
+                COLLECTION.deleteOne({sessionId: session.sessionId}, callback);
+            })
+        },
+//
+        getAndSet: function (session, callback) {
+            try {
+                this.sessionRetrieve(session.sessionId, function (retrievedsession) {
+                    this.sessionUpdate(session.sessionId, retrievedsession, function () {
+                        callback();
+                    });               
+                });
+            } catch(e) {
+                if (e === 'nonexistant') {
+                    console.log('the queried session does not exist (creating a new one): ', e);
+                    this.sessionUpdate(session, function () {
+                        callback();
+                    });
+                } else {
+                    console.log('the error in sessionRetrieve was not nonexistant', e);
+                }
             }
         },
 //
-        expireSession: function (sessionId, callback) {
-            checkWhetherInitialized(function () {
-                //  there is no column named sessionId; need to do that
-                COLLECTION.deleteOne({sessionId: sessionId}, );
-            })
-        }      
+        closeDb: function (callback) {
+            DB.close(false, function (err, result) {
+                if (err) {
+                    console.log('error closing: ', err);
+                } else {
+                    console.log('database is closed', result);
+                    callback();
+                }
+            });
+        }
     }
 })();
 
 
 //////////////////////////////////////
-
+//  temp folder ID should be in the session!!!!
 function getTempFolder (callback) {
     var service = google.drive('v3');
     var query = 'properties has { key="hermesis_folder" and value="true" } and mimeType="application/vnd.google-apps.folder" and name="temp"';
@@ -172,6 +218,7 @@ function getTempFolder (callback) {
             callback("error");
         } else {
             console.log("folderlist: ", folderlist.files);
+            //  put temp id in database session object
             callback(folderlist.files[0].id);
         }   
     }); 
@@ -194,6 +241,7 @@ function createTempFolder (callback) {
         if (err) {
             console.log('error creating temp folder: ', err);
         } else {
+            //  put temp folder ID in database session object
             TEMP_FOLDER = folder.id;
         }   
     }); 
