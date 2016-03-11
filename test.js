@@ -156,11 +156,11 @@ var dbCaller = (function () {
         },
 */
 //
-        sessionRetrieve: function (session, callback) {
+        sessionRetrieve: function (sessionId, callback) {
             this.checkWhetherInitialized(function () {
-                COLLECTION.findOne(session.sessionId, function (err, item) {
+                COLLECTION.findOne(sessionId, function (err, item) {
                     if (err) {
-                        console.log("error retrieving session from DB: ", session.sessionId, err);
+                        console.log("error retrieving ${sessionId} from DB: ", err);
                     } else {
                         callback(item.session);
                     }
@@ -175,22 +175,24 @@ var dbCaller = (function () {
             })
         },
 //
-        getAndSet: function (session, callback) {
+        getAndSet: function (sessionId, updateobject, callback) {
             try {
-                this.sessionRetrieve(session.sessionId, function (retrievedsession) {
-                    this.sessionUpdate(session.sessionId, retrievedsession, function () {
-                        callback();
-                    });               
+                this.sessionRetrieve(sessionId, function (retrievedsession) {
+                    retrievedsession.update(updateobject, function (finalsession) {
+                        this.sessionUpdate(finalsession, function () {
+                             callback();
+                        });               
+                    });
                 });
             } catch(e) {
-                if (e === 'nonexistant') {
-                    console.log('the queried session does not exist (creating a new one): ', e);
-                    this.sessionUpdate(session, function () {
-                        callback();
-                    });
-                } else {
-                    console.log('the error in sessionRetrieve was not nonexistant', e);
-                }
+//                if (e === 'nonexistant') {
+//                    console.log('the queried session does not exist (creating a new one): ', e);
+//                    this.sessionUpdate(session, function () {
+//                        callback();
+//                    });
+//                } else {
+                console.log('the error in sessionRetrieve was not nonexistant', e);
+//                }
             }
         },
 //
@@ -204,7 +206,7 @@ var dbCaller = (function () {
                 }
             });
         }
-    }
+    };
 })();
 
 
@@ -350,7 +352,7 @@ async.waterfall([
                 });
             });
             res.end("authentication complete");
-            //  res.end(session);
+            //  res.end(session.sessionId);
         });
         app.get('/createfolder', function (req, res) {
             var service = google.drive('v3');
@@ -384,10 +386,13 @@ async.waterfall([
             });
         });
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
-            //  session = req.body.session;
+            //  sessionId = req.body.sessionId;
+            
             //  execute doc commands to substitute text on the file
             //  session.setOriginalId(req.body.id);
-            //  dbCaller.getAndSet(session.sessionId, session);
+            //  dbCaller.getAndSet(sessionId, session, function () {
+            //         the logic for getAndSet is wrong. You should only have to provide an ID, which gets a session, which you then modify and save to DB 
+            //  };
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
@@ -441,7 +446,9 @@ async.waterfall([
                         //  return the PDF to the extension to be attached to the email
                         exportFileIdToPdf(copyId, function (fileLocation) {
                             //  session.setPdfPath(fileLocation);
-                            //  dbCaller.getAndSet(session.sessionId, session);
+                            //  dbCaller.getAndSet(session.sessionId, session, function () {
+                            //      
+                            //  });
                             console.log('\nfileLocation: ', fileLocation);
                             result.download(fileLocation, 'stupidfile.pdf', function (err) {
                                 if (err) {
