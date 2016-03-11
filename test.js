@@ -304,15 +304,13 @@ async.waterfall([
                     dbCaller.sessionRetrieve(session.sessionId, function (sessionobject) {
                         if (folderId === 'error') {
                             createTempFolder(function (newfolderId) {
-                                dbCaller.getAndSet(session.sessionId, {templatefolderPath: newfolderId} function () {
+                                dbCaller.getAndSet(session.sessionId, {templatefolderPath: newfolderId}, function () {
                                     return;  
                                 });
                             });
                         } else {
-                            createTempFolder(function (newfolderId) {
-                                dbCaller.getAndSet(session.sessionId, {templatefolderPath: folderId} function () {
-                                    return;  
-                                });
+                            dbCaller.getAndSet(session.sessionId, {templatefolderPath: folderId}, function () {
+                                return;  
                             });
                         }
                     });
@@ -321,7 +319,7 @@ async.waterfall([
             res.end(session.sessionId);
         });
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
-            sessionId = req.body.sessionId;
+            var sessionId = req.body.sessionId;
             
             //  execute doc commands to substitute text on the file
 
