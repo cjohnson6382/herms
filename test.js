@@ -42,47 +42,43 @@ function generateSessionId (callback) {
     //  hashing the date to create a 'unique' value - so bad; 
     //      this should:
     //          get a unique identifier from the DB and return that
-    var data = new Date.now();  
+    var data = new Date();  
     hash.on('readable', () => {
         var hashed = hash.read();
         if (hashed) {
-            console.log('hashed your data', data, data.toString());
-            callback(hashed.toString('utf8'));
+            console.log('hashed your data', hashed.toString('hex'));
+            callback(hashed.toString('hex'));
         }
     });
-    hash.write(data);
+    hash.write(data.toString());
     hash.end();
 }
 
-function SessionObject (data) {
-    //  the data object is a json of the necessary variables
+function SessionObject () {
+    this.properties = {
+        sessionId: '',
+        originalId: '',
+        copyId: '',
+        pdfPath: '',
+        templatefolderPath: '',
+        fields: ''
+    };
 
-    //  this is for the optimistic scenario where you get all
-    //      the data that you need in one shot; otherwise it creates
-    //      an empty SessionObject
+    var that = this;
     generateSessionId(function (generatedId) {
-        this.sessionId = generatedId;
-        this.originalId = data.originalId;
-        this.copyId = data.copyId;
-        this.pdfpath = data.pdfpath;
-        this.tempfolderId = data.tempfolderId;
+        console.log("return from generateId: ", generatedId);
+        that.properties.sessionId = generatedId;
     });
-
-    this.setOriginalId = function (id) {
-        this.originalId = id; 
-    };
-    
-    this.setCopyId = function (id) {
-        this.copyId = id;
-    };
-    
-    this.setPdfPath = function (path) {
-        this.pdfpath = path;
-    };
-    
-    this.setTempfolderId = function (id) {
-        this.tempfolderId = id;
-    };
+   
+    var update = function (updateobject) {
+        for (var key in Object.keys(updateobject)) {
+            if (this.properties.hasOwnProperty(key)) {
+                this.properties[key] = updateobject[key];
+            } else {
+                console.log("properties in this session does not contain the key ${key}");
+            }
+        }
+    }
 }
 
 
@@ -94,6 +90,7 @@ var dbCaller = (function () {
     return {
         initializeDb: function (callback) {
             try {
+                console.log("initializing the DB");
                 var client = mongo.MongoClient;
                 var url = 'mongodb://localhost:27017/session_db';
                 client.connect(url, function (err, db) {
@@ -120,15 +117,14 @@ var dbCaller = (function () {
         checkWhetherInitialized: function (callback) {
             try {
                 if (!COLLECTION) { 
-                    throw 'COLLECTION not set' 
+                    throw 'COLLECTION not set... setting it now' 
                 } else { callback() }
             } catch (e) {
                 console.log(e);
                 this.initializeDb(callback);
             }
         },
-//  in addition to having an insert, should have an update
-//      for when you are just completing the SessionObject
+//
         sessionUpdate: function (session, callback) {
             //  update an existing db entry
             this.checkWhetherInitialized(function () {
@@ -144,17 +140,6 @@ var dbCaller = (function () {
                 });
             });
         }, 
-/*
-        sessionInsert: function (session, callback) {
-            checkWhetherInitialized(function () {
-                COLLECTION.insert({
-                    sessionId: session.sessionId, 
-                    session: session
-                });
-                callback();
-            });
-        },
-*/
 //
         sessionRetrieve: function (sessionId, callback) {
             this.checkWhetherInitialized(function () {
@@ -168,7 +153,7 @@ var dbCaller = (function () {
             });
         },
 //
-        expireSession: function (session, callback) {
+        expireSession: function (sessionId, callback) {
             this.checkWhetherInitialized(function () {
                 //  there is no column named sessionId; need to do that
                 COLLECTION.deleteOne({sessionId: session.sessionId}, callback);
@@ -185,14 +170,7 @@ var dbCaller = (function () {
                     });
                 });
             } catch(e) {
-//                if (e === 'nonexistant') {
-//                    console.log('the queried session does not exist (creating a new one): ', e);
-//                    this.sessionUpdate(session, function () {
-//                        callback();
-//                    });
-//                } else {
                 console.log('the error in sessionRetrieve was not nonexistant', e);
-//                }
             }
         },
 //
@@ -211,7 +189,6 @@ var dbCaller = (function () {
 
 
 //////////////////////////////////////
-//  temp folder ID should be in the session!!!!
 function getTempFolder (callback) {
     var service = google.drive('v3');
     var query = 'properties has { key="hermesis_folder" and value="true" } and mimeType="application/vnd.google-apps.folder" and name="temp"';
@@ -248,15 +225,14 @@ function createTempFolder (callback) {
         if (err) {
             console.log('error creating temp folder: ', err);
         } else {
-            //  put temp folder ID in database session object
-            TEMP_FOLDER = folder.id;
+            callback(folder.id);
         }   
     }); 
 }
 
 function exportFileIdToPdf (id, callback) {
     var service = google.drive('v3');
-    var tempfilename = 'temp/' + id + "-" + Date.now() + ".pdf";
+    var tempfilename = 'temp/' + id + "-" + Date() + ".pdf";
     var dest = fs.createWriteStream(tempfilename);
     console.log("dest path and filename: " + tempfilename);
 
@@ -274,7 +250,6 @@ function exportFileIdToPdf (id, callback) {
     })  
     .pipe(dest);
 }
-
 
 async.waterfall([
     function (callback) {
@@ -317,82 +292,43 @@ async.waterfall([
             res.end(authorization_url);
         });
         app.get('/callback', function (req, res) {
+            //  a new session with a sessionId
+            var session = new SessionObject();
             oauth2Client.getToken(req.query.code, function (err, token) {
                 if (err) {
                     console.log('ERR while getting access token', err);
                 }
                 oauth2Client.credentials = token;
-               
-                //  create a session and return it so that the user gets their session token when auth completes
-                //  var session = new SessionObject();
 
                 getTempFolder(function (folderId) {
-                    //  THERE SHOULD BE NO TEMP_FOLDER GLOBAL; SHOULD BE IN SESSION INFO
-                    /*
-                    //  is this the right place to create the session object?
-                    dbCaller.sessionRetrieve(session, function (sessionobject) {
+                    dbCaller.sessionRetrieve(session.sessionId, function (sessionobject) {
                         if (folderId === 'error') {
                             createTempFolder(function (newfolderId) {
-                                sessionobject.setTempfolderId(newfolderId);
+                                dbCaller.getAndSet(session.sessionId, {templatefolderPath: newfolderId} function () {
+                                    return;  
+                                });
                             });
-                            return;
                         } else {
-                            sessionobject.setTempfolderId(folderId);
-                            return;
+                            createTempFolder(function (newfolderId) {
+                                dbCaller.getAndSet(session.sessionId, {templatefolderPath: folderId} function () {
+                                    return;  
+                                });
+                            });
                         }
                     });
-                    */
-                    TEMP_FOLDER = folderId;
-                    if (TEMP_FOLDER === 'error') {
-                        createTempFolder(function (folderId) {
-                            TEMP_FOLDER = folderId;
-                            return;
-                        });
-                    } else { return; }
                 });
             });
-            res.end("authentication complete");
-            //  res.end(session.sessionId);
-        });
-        app.get('/createfolder', function (req, res) {
-            var service = google.drive('v3');
-            var metadata = {
-                'name': 'testfolder',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'properties': {
-                    hermesis_folder: true
-                }
-            };
-            var result = service.files.create({
-                auth: oauth2Client,
-                resource: metadata,
-                fields: 'id'
-            });
-            res.send("The folder was created with ID", result);
-        });
-        app.post('/downloadfile', upload.single('id'), function (req, res) {
-            var fileid = req.body.id;
-            var service = google.drive('v3');
-            service.files.get({
-                auth: oauth2Client,
-                fileId: fileid,
-                fields: "webContentLink"
-            }, function (err, response) {
-                if (err) {
-                    console.log("error downloading from Drive: ", err);        
-                } else {
-                    res.end(response.webContentLink);
-                }
-            });
+            res.end(session.sessionId);
         });
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
-            //  sessionId = req.body.sessionId;
+            sessionId = req.body.sessionId;
             
             //  execute doc commands to substitute text on the file
-            //  session.setOriginalId(req.body.id);
-            //  dbCaller.getAndSet(sessionId, session, function () {
-            //         the logic for getAndSet is wrong. You should only have to provide an ID, which gets a session, which you then modify and save to DB 
-            //  };
+
+            dbCaller.getAndSet(sessionId, { originalId: req.body.id }, function () {
+                console.log("set ${sessionId} with originalId to ${req.body.id}");
+            });
+
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
@@ -440,16 +376,16 @@ async.waterfall([
                     if (err) {
                         console.log("error copying the template file: " + err);
                     }
-                    //  session.setCopyId(file.id);
-                    //  db.caller.getAndSet(session.sessionId, session);
+                    dbCaller.getAndSet(session.sessionId, { copyId: file.id }, function () {
+                        console.log("set ${session.sessionId} copyId to ${file.id}");
+                    });
+
                     fillinCopy(file.id, function (copyId) {
                         //  return the PDF to the extension to be attached to the email
                         exportFileIdToPdf(copyId, function (fileLocation) {
-                            //  session.setPdfPath(fileLocation);
-                            //  dbCaller.getAndSet(session.sessionId, session, function () {
-                            //      
-                            //  });
-                            console.log('\nfileLocation: ', fileLocation);
+                            dbCaller.getAndSet(session.sessionId, { pdfPath: fileLocation }, function () {
+                                console.log("set ${session.sessionId} with pdfPath to ${fileLocation}");
+                            });
                             result.download(fileLocation, 'stupidfile.pdf', function (err) {
                                 if (err) {
                                     console.log('error sending download: ' + err);
@@ -462,11 +398,13 @@ async.waterfall([
                 }
             );
         });
+
         /* app.get('/sent', function (req, res) {}) */
-            //  when the email is sent/discarded, return teh appropriate message to the server
-            
-            //  if sent -> archive; if discarded -> delete
-        
+        //  when the email is sent/discarded, return teh appropriate message to the server            
+        //  if sent -> archive; if discarded -> delete
+
+        /* app.post('/discarded', function (req, res) {}) */
+
         app.post('/savemetadata', urlencodedParser, function (req, res) {
             var service = google.drive('v3');
             var JSONlocation;
@@ -474,6 +412,7 @@ async.waterfall([
 
             var fields = JSON.parse(req.body.metadataitems);
             var docid = req.body.docid;
+            //  var sessionId = req.body.sessionId;
 
             var rs = JSON.stringify({parentid: docid, fields: fields});
             var timestamp = new Date();
@@ -493,7 +432,7 @@ async.waterfall([
                 body: rs
             };
 
-            //  this creates the JSON file
+            //  this creates the JSON file where all the template's fields are stored
             service.files.create({
                 auth: oauth2Client,
                 resource: fileMetadata,
@@ -504,7 +443,6 @@ async.waterfall([
                 if (err) {
                     console.log('error creating JSON for file| file: ', docid, " err: ", err);
                 } else {
-                    console.log('successfully executed a drive call ', file.id);
                     JSONlocation = file.id;
                     lastmodified = file.modifiedByMeTime;
 
@@ -525,12 +463,16 @@ async.waterfall([
                            console.log("error updating metadata", err);
                        } else {
                            console.log("successfully updated metadata: ", file.id);
+                           dbCaller.getAndSet(sessionId, { fields: JSONlocation }, function () {
+                               console.log('successfully created the JSON file for template ${req.body.id}: ', JSONlocation);
+                           });
                            res.end(file.id);
                        }
                    })
                 }
             })
         });
+        //  get the JSON configuration file associated with a template's fields
         app.post('/getfields', upload.single(), function (req, res) {
             var service = google.drive('v3');
             service.files.get({
@@ -556,6 +498,90 @@ async.waterfall([
                 }
             })
         });
+        //  need to change this to list files that the application has created when desired
+        //      some kind of flag, so this function can still be used to access the whole google drive for the user to 'upload' a contract from there
+        app.get('/listfiles', function (req, res) {
+            var service = google.drive('v3');
+            //  this is to so that you can list just hermesis files or all files in case
+            //      I include a way to convert a document to a template inside the extension
+            /*
+            if (req.body.hermesislist === true) {
+                var query: "properties has { key='hermesis_template' and value='true'} ";
+            } else {
+                var query: "";
+            }
+            */
+            service.files.list({
+                auth: oauth2Client,
+                pageSize: 10,
+                fields: "nextPageToken, files(id, name)",
+                q: "properties has { key='hermesis_template' and value='true'} "
+            }, function(err, response) {
+                if (err) {
+                    console.log('The API returned an error: ' + err);
+                    return;
+                }
+                var files = response.files;
+                if (files.length == 0) {
+                    console.log('No files found.');
+                } 
+                else {
+                    res.send(response.files);
+                }
+            });
+        });
+        callback();
+    },
+], function (err, result) {
+    if (!err) {
+        var options = {
+            key : fs.readFileSync('server.enc.key'),
+            cert: fs.readFileSync('server.crt')
+        }
+        https.createServer(options, app).listen(443, function () {
+            console.log('Server is started as HTTPS');
+        })
+    }
+});
+
+/*
+        //  deletion candidate
+        app.get('/createfolder', function (req, res) {
+            var service = google.drive('v3');
+            var metadata = {
+                'name': 'testfolder',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'properties': {
+                    hermesis_folder: true
+                }
+            };
+            var result = service.files.create({
+                auth: oauth2Client,
+                resource: metadata,
+                fields: 'id'
+            });
+            res.send("The folder was created with ID", result);
+        });
+        //  deletion candidate
+        app.post('/downloadfile', upload.single('id'), function (req, res) {
+            var fileid = req.body.id;
+            var service = google.drive('v3');
+            service.files.get({
+                auth: oauth2Client,
+                fileId: fileid,
+                fields: "webContentLink"
+            }, function (err, response) {
+                if (err) {
+                    console.log("error downloading from Drive: ", err);        
+                } else {
+                    res.end(response.webContentLink);
+                }
+            });
+        });
+*/
+
+        //  deletion candidate
+/*
         app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
             var service = google.drive('v3');
             var metadata = {
@@ -578,40 +604,5 @@ async.waterfall([
             console.log(req.file);
             res.end("file saved to Google Drive");
         });
-        //  need to change this to list files that the application has created when desired
-        //      some kind of flag, so this function can still be used to access the whole google drive for the user to 'upload' a contract from there
-        app.get('/listfiles', function (req, res) {
-            var service = google.drive('v3');
-            service.files.list({
-                auth: oauth2Client,
-                pageSize: 10,
-                fields: "nextPageToken, files(id, name)",
-                q: "properties has { key='hermesis_template' and value='true'} "
-            }, function(err, response) {
-                if (err) {
-                    console.log('The API returned an error: ' + err);
-                    return;
-                }
-                var files = response.files;
-                if (files.length == 0) {
-                    console.log('No files found.');
-                } 
-                else {
-                    res.send(response.files);
-                }
-            });
-        });
+*/  
 
-        callback();
-    },
-], function (err, result) {
-    if (!err) {
-        var options = {
-            key : fs.readFileSync('server.enc.key'),
-            cert: fs.readFileSync('server.crt')
-        }
-        https.createServer(options, app).listen(443, function () {
-            console.log('Server is started as HTTPS');
-        })
-    }
-});
