@@ -70,7 +70,7 @@ function SessionObject () {
         that.properties.sessionId = generatedId;
     });
    
-    var update = function (updateobject) {
+    var update = function (updateobject, callback) {
         for (var key in Object.keys(updateobject)) {
             if (this.properties.hasOwnProperty(key)) {
                 this.properties[key] = updateobject[key];
@@ -78,17 +78,20 @@ function SessionObject () {
                 console.log("properties in this session does not contain the key ${key}");
             }
         }
+        callback();
     }
 }
 
-
-//  MAKE SURE TO CREATE THE DB**************************************
+//  you have to create a DB named session_db before you can use this code;
+//      creating a DB in the mongo shell is easy: 'use session_db' will create the DB
+//      and select it if it doesn't exist already
 var dbCaller = (function () {
     var COLLECTION;
     var DB;
-    
+    var COLLECTION_NAME = 'session_data'; 
     return {
         initializeDb: function (callback) {
+            that = this;
             try {
                 console.log("initializing the DB");
                 var client = mongo.MongoClient;
@@ -99,19 +102,39 @@ var dbCaller = (function () {
                         throw err;
                     } else {
                         DB = db;
-                        DB.createCollection('session_data', function (err, collection) {
-                            if (err) { 
-                                console.log("error initializing DB: ", err); 
-                            } else {
-                                COLLECTION = collection;
-                                callback();
-                            }
+                        that.getCollection(DB, COLLECTION_NAME, function (collection) {
+                           console.log("getCollection returns a collection object");
                         });
                     }
                 });
             } catch (e) {
                 console.log('cannot initialize the DB: ', e);
             }       
+        },
+//
+        createCollection: function (db, collection_name, callback) {
+            db.createCollection(collection_name, function (err, collection) {
+                if (err) {
+                    console.log("error creating collection: ", err);
+                } else {
+                    console.log("collection: ", collection.constructor);    
+                    callback();
+                }
+            }); 
+        },
+//
+        getCollection: function (db, collection_name, callback) {
+            try {
+                COLLECTION = db.collection(collection_name);
+                console.log("COLLECTION after assignment: ", COLLECTION);
+                callback(COLLECTION);
+            } catch (e) {
+                console.log("collection session_data does not exist: ", e);
+                this.createCollection(collection_name, function () {
+                    COLLECTION = db.collection(collection_name);
+                    callback(COLLECTION);
+                });
+            }
         },
 //
         checkWhetherInitialized: function (callback) {
@@ -134,8 +157,8 @@ var dbCaller = (function () {
                     if (err) {
                         console.log("error updating DB: ", err)
                     } else {
-                        console.log("updated ${sessionId} with new data: ${session}; result is (1 is good): ${results.result.ok}");
-                        callback();
+                        console.log("updated sessionId, results are: ", results.result);
+                        callback(results.result);
                     }
                 });
             });
@@ -143,13 +166,18 @@ var dbCaller = (function () {
 //
         sessionRetrieve: function (sessionId, callback) {
             this.checkWhetherInitialized(function () {
-                COLLECTION.findOne(sessionId, function (err, item) {
-                    if (err) {
-                        console.log("error retrieving ${sessionId} from DB: ", err);
-                    } else {
-                        callback(item.session);
-                    }
-                });
+                try {
+                    COLLECTION.findOne(sessionId, function (err, item) {
+                        if (err) {
+                            console.log("error retrieving ${sessionId} from DB: ", err);
+                        } else {    
+                            console.log("DB response to the DB query: ", item);
+                            callback(item.session);
+                        }
+                    });
+                } catch (e) {
+                    console.log("collection.findOne failed: ", e);
+                }
             });
         },
 //
@@ -162,7 +190,7 @@ var dbCaller = (function () {
 //
         getAndSet: function (sessionId, updateobject, callback) {
             try {
-                this.sessionRetrieve(sessionId, function (retrievedsession) {
+                this.sessionRetrieve(sessionId, function (retrievedsession) { 
                     retrievedsession.update(updateobject, function (finalsession) {
                         this.sessionUpdate(finalsession, function () {
                              callback();
@@ -198,11 +226,11 @@ function getTempFolder (callback) {
         fields: 'files/id'
     }, function (err, folderlist) {
         if (err) {
-            console.log('could not get the temp folder', err);
-            callback("error");
+            console.log('could not get the temp folder (creating new one)', err);
+            createTempFolder(function (folderid) {
+                callback(folderid);
+            });
         } else {
-            console.log("folderlist: ", folderlist.files);
-            //  put temp id in database session object
             callback(folderlist.files[0].id);
         }   
     }); 
@@ -301,23 +329,20 @@ async.waterfall([
                 oauth2Client.credentials = token;
 
                 getTempFolder(function (folderId) {
-                    dbCaller.sessionRetrieve(session.sessionId, function (sessionobject) {
-                        if (folderId === 'error') {
-                            createTempFolder(function (newfolderId) {
-                                dbCaller.getAndSet(session.sessionId, {templatefolderPath: newfolderId}, function () {
-                                    return;  
-                                });
-                            });
-                        } else {
-                            dbCaller.getAndSet(session.sessionId, {templatefolderPath: folderId}, function () {
-                                return;  
-                            });
-                        }
+                    session.update({templatefolderPath: folderId}, function () {
+                        dbCaller.sessionUpdate(session, function (sessionobject) {
+                            console.log("in callback route, sessionobject from DB is:", sessionobject);
+                        });
                     });
                 });
             });
             res.end(session.sessionId);
         });
+//  this may be wrong.... how am I supposed to determine what session to get???
+        app.post('/getsessionid', function (req, res) {
+
+        });
+//
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
             var sessionId = req.body.sessionId;
             
@@ -330,6 +355,7 @@ async.waterfall([
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
+            var sessionId = req.body.sessionId;
             var result = res;
             var tempfile_title = "temp copy " + new Date() + "  " + req.body.id;
             
