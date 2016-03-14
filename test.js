@@ -25,8 +25,8 @@ var authorization_url;
 
 var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
 
-//  fix me fix me fix me !!!!
-var TEMP_FOLDER = "placeholder for the temp folder's id";
+//  delete me
+//var TEMP_FOLDER = "placeholder for the temp folder's id";
 
 var scopes = [
     'https://www.googleapis.com/auth/drive.appdata',
@@ -317,32 +317,22 @@ async.waterfall([
         });
         app.get('/auth', function (req, res) {
             res.writeHead(200, {'Access-Control-Allow-Origin' : '*'});
-            res.end(authorization_url);
+            var session = new SessionObject();
+            dbCaller.sessionUpdate(session, function (sessionobject) {
+                console.log('session successfully created in DB: ', sessionobject);
+                res.end({auth_url: authorization_url, session: session.sessionId});
+            }); 
         });
         app.get('/callback', function (req, res) {
             //  a new session with a sessionId
-            var session = new SessionObject();
             oauth2Client.getToken(req.query.code, function (err, token) {
                 if (err) {
                     console.log('ERR while getting access token', err);
                 }
                 oauth2Client.credentials = token;
-
-                getTempFolder(function (folderId) {
-                    session.update({templatefolderPath: folderId}, function () {
-                        dbCaller.sessionUpdate(session, function (sessionobject) {
-                            console.log("in callback route, sessionobject from DB is:", sessionobject);
-                        });
-                    });
-                });
             });
-            res.end(session.sessionId);
+            res.end('authentication happened');
         });
-//  this may be wrong.... how am I supposed to determine what session to get???
-        app.post('/getsessionid', function (req, res) {
-
-        });
-//
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
             var sessionId = req.body.sessionId;
             
@@ -388,39 +378,42 @@ async.waterfall([
             }
              
             //  copy the template file into a temp directory
-            service.files.copy({
-                auth: oauth2Client,
-                fileId: req.body.id,
-                fields: "id",
-                resource: {
-                    title: tempfile_title,
-                    description: "copy of a template file for app use; do not modify",
-                    parents: [TEMP_FOLDER]
-                }}, function (err, file) {
-                    if (err) {
-                        console.log("error copying the template file: " + err);
-                    }
-                    dbCaller.getAndSet(session.sessionId, { copyId: file.id }, function () {
-                        console.log("set ${session.sessionId} copyId to ${file.id}");
-                    });
 
-                    fillinCopy(file.id, function (copyId) {
-                        //  return the PDF to the extension to be attached to the email
-                        exportFileIdToPdf(copyId, function (fileLocation) {
-                            dbCaller.getAndSet(session.sessionId, { pdfPath: fileLocation }, function () {
-                                console.log("set ${session.sessionId} with pdfPath to ${fileLocation}");
-                            });
-                            result.download(fileLocation, 'stupidfile.pdf', function (err) {
-                                if (err) {
-                                    console.log('error sending download: ' + err);
-                                } else {
-                                    console.log('file successfully sent', res.headersSent);
-                                }
-                            }); 
+            getTempFolder(function (folderId) {
+                service.files.copy({
+                    auth: oauth2Client,
+                    fileId: req.body.id,
+                    fields: "id",
+                    resource: {
+                        title: tempfile_title,
+                        description: "copy of a template file for app use; do not modify",
+                        parents: [folderId]
+                    }}, function (err, file) {
+                        if (err) {
+                            console.log("error copying the template file: " + err);
+                        }
+                        dbCaller.getAndSet(session.sessionId, { copyId: file.id }, function () {
+                            console.log("set ${session.sessionId} copyId to ${file.id}");
                         });
-                    });
-                }
-            );
+    
+                        fillinCopy(file.id, function (copyId) {
+                            //  return the PDF to the extension to be attached to the email
+                            exportFileIdToPdf(copyId, function (fileLocation) {
+                                dbCaller.getAndSet(session.sessionId, { pdfPath: fileLocation }, function () {
+                                    console.log("set ${session.sessionId} with pdfPath to ${fileLocation}");
+                                });
+                                result.download(fileLocation, 'stupidfile.pdf', function (err) {
+                                    if (err) {
+                                        console.log('error sending download: ' + err);
+                                    } else {
+                                        console.log('file successfully sent', res.headersSent);
+                                    }
+                                }); 
+                            });
+                        });
+                    }
+                );
+            });
         });
 
         /* app.get('/sent', function (req, res) {}) */
