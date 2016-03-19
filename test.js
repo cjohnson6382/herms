@@ -33,7 +33,8 @@ var scopes = [
     'https://www.googleapis.com/auth/drive.file',
     'https://www.googleapis.com/auth/drive.metadata',
     'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/documents'
+    'https://www.googleapis.com/auth/documents',
+    'https://www.googleapis.com/auth/gmail.modify'
 ];
 
 /////////////////////////////////////
@@ -66,21 +67,115 @@ function SessionObject () {
 
     var that = this;
     generateSessionId(function (generatedId) {
-        console.log("return from generateId: ", generatedId);
+//        console.log("return from generateId: ", generatedId);
         that.properties.sessionId = generatedId;
     });
    
-    var update = function (updateobject, callback) {
-        for (var key in Object.keys(updateobject)) {
-            if (this.properties.hasOwnProperty(key)) {
-                this.properties[key] = updateobject[key];
-            } else {
-                console.log("properties in this session does not contain the key ${key}");
-            }
-        }
-        callback();
-    }
 }
+
+SessionObject.update = function (session, updateobject, callback) {
+//    for (var key in Object.keys(updateobject)) {
+    for (var key in updateobject) {
+        if (session.properties.hasOwnProperty(key)) {
+//            console.log('SessionObject.update is successful', key);
+            session.properties[key] = updateobject[key];
+        } else {
+            console.log("updateobject used:", updateobject);
+        }
+    }
+    callback(session);
+}
+
+var gmailApiHelper = (function () {
+    var GMAIL = google.gmail('v1');
+    return {
+        createAppLabel: function (callback) {
+            GMAIL.users.labels.create({
+                auth: oauth2Client,
+                userId: 'me',
+                fields: 'id, name',
+                resource: {
+                    labelListVisibility: 'labelHide',
+                    messageListVisibility: 'hide',
+                    name: 'hermesis'
+                }
+            }, function (err, response) {
+                if (err) {
+                    console.log('error creating the hermesis label in user inbox', err);
+                } else {
+                    console.log('successfully created hermesis label in user inbox', response);
+                    callback();
+                }
+            });
+        },
+        labelEmail: function (messageId, labelId, callback) {
+            console.log('labelEmail messageId: ', messageId, labelId);
+            GMAIL.users.messages.modify({
+                auth: oauth2Client,
+                userId: 'me',
+                id: messageId,
+                resource: {
+                    addLabelIds: [labelId]
+                }
+            }, function (err, response) {
+                if (err) {
+                    console.log('error labeling the supplied email with Hermesis', err); 
+                } else {
+                    console.log('email labeled with hermesis: ', response);
+                }
+            });
+        },
+        getGmailMessage: function (messageId, callback) {
+            GMAIL.users.messages.get({
+                auth: oauth2Client,
+                userId: 'me',
+                id: messageId
+            }, function (err, response) {
+                if (err) {
+                    console.log('error calling gmail API: ', err);
+                } else {
+                    console.log('gmail api successfully called: ', response);
+                    callback(response.id);
+                }
+            });
+        },
+        checkForHermesisLabel: function (callback) {
+            GMAIL.users.labels.list({
+                auth: oauth2Client,
+                userId: 'me',
+            }, function (err, response) {
+                if (err) {
+                    console.log('error checking for hermesis label: ', err);
+                } else {
+//                    console.log('response.labels in checkForHermesisLabel: ', response);
+                    var names = {};
+                    response.labels.map(function (obj) {
+                        names[obj.name] = obj.id;
+                    });
+                    console.log('names in the checkforhermesislabel function: ', names);
+                    var labelnames = Object.keys(names);
+                    var hermesis_present = labelnames.indexOf('hermesis');
+                    if (hermesis_present === -1) {
+                        gmailApiHelper.createAppLabel(function () {
+                            console.log('created label');
+                            callback(names['hermesis']);
+                        });
+                    } else {
+                        console.log('label already exists');
+                        callback(names['hermesis']);
+                    }
+                }
+            });
+//  check whether the hermesis label exists, return if it does, create if it doesn't:
+//      when you list labels, it returns an array of objects:
+//          labelslist.map(function (current) {
+//              return current.name;
+//          });;
+
+
+        },
+    }
+})();
 
 //  you have to create a DB named session_db before you can use this code;
 //      creating a DB in the mongo shell is easy: 'use session_db' will create the DB
@@ -126,7 +221,7 @@ var dbCaller = (function () {
         getCollection: function (db, collection_name, callback) {
             try {
                 COLLECTION = db.collection(collection_name);
-                console.log("COLLECTION after assignment: ", COLLECTION);
+//                console.log("COLLECTION after assignment: ", COLLECTION);
                 callback(COLLECTION);
             } catch (e) {
                 console.log("collection session_data does not exist: ", e);
@@ -143,7 +238,7 @@ var dbCaller = (function () {
                     throw 'COLLECTION not set... setting it now' 
                 } else { callback() }
             } catch (e) {
-                console.log(e);
+                console.log("no collection object set; initializing DB", e);
                 this.initializeDb(callback);
             }
         },
@@ -151,13 +246,14 @@ var dbCaller = (function () {
         sessionUpdate: function (session, callback) {
             //  update an existing db entry
             this.checkWhetherInitialized(function () {
-                var filter = {sessionId: session.sessionId};
-                var data = { $set: {sessionId: session.sessionId, session: session} };
+                var filter = {sessionId: session.properties.sessionId};
+                var data = { $set: {sessionId: session.properties.sessionId, session: session} };
+//                console.log("parts of the query:", filter, data);
                 COLLECTION.updateOne(filter, data, {upsert: true}, function (err, results) {
                     if (err) {
                         console.log("error updating DB: ", err)
                     } else {
-                        console.log("updated sessionId, results are: ", results.result);
+                        //  console.log("updated sessionId, results are: ", results.result);
                         callback(results.result);
                     }
                 });
@@ -166,12 +262,13 @@ var dbCaller = (function () {
 //
         sessionRetrieve: function (sessionId, callback) {
             this.checkWhetherInitialized(function () {
+//                console.log("this is the session ID used for sessionRetrieve: ", sessionId);
                 try {
-                    COLLECTION.findOne(sessionId, function (err, item) {
+                    COLLECTION.findOne({'sessionId': sessionId}, function (err, item) {
                         if (err) {
-                            console.log("error retrieving ${sessionId} from DB: ", err);
+                            console.log("error retrieving from DB: ", err);
                         } else {    
-                            console.log("DB response to the DB query: ", item);
+//                            console.log("DB response to the DB query: ", item);
                             callback(item.session);
                         }
                     });
@@ -189,11 +286,16 @@ var dbCaller = (function () {
         },
 //
         getAndSet: function (sessionId, updateobject, callback) {
+            var that = this;
+//            console.log('ID used for getAndSet: ', sessionId);
             try {
-                this.sessionRetrieve(sessionId, function (retrievedsession) { 
-                    retrievedsession.update(updateobject, function (finalsession) {
-                        this.sessionUpdate(finalsession, function () {
-                             callback();
+                that.sessionRetrieve(sessionId, function (retrievedsession) { 
+//                    console.log("session retrieved in getAndSet: ", retrievedsession);
+                    SessionObject.update(retrievedsession, updateobject, function (finalsession) {
+//                        console.log('getAndSet: finalsession inserted: ', finalsession);
+                        that.sessionUpdate(finalsession, function (updatestatus) {
+//                           console.log('status of sessionUpdate when getAndSet calls:', updatestatus);
+                            callback();
                         });               
                     });
                 });
@@ -262,7 +364,7 @@ function exportFileIdToPdf (id, callback) {
     var service = google.drive('v3');
     var tempfilename = 'temp/' + id + "-" + Date() + ".pdf";
     var dest = fs.createWriteStream(tempfilename);
-    console.log("dest path and filename: " + tempfilename);
+//    console.log("dest path and filename: " + tempfilename);
 
     service.files.export({
         auth: oauth2Client,
@@ -270,7 +372,7 @@ function exportFileIdToPdf (id, callback) {
         mimeType: 'application/pdf'
     })  
     .on('end', function () {
-        console.log('done writing PDF to temp file');
+//       console.log('done writing PDF to temp file');
         callback(tempfilename);
     })  
     .on('error', function (err) {
@@ -319,8 +421,9 @@ async.waterfall([
             res.writeHead(200, {'Access-Control-Allow-Origin' : '*'});
             var session = new SessionObject();
             dbCaller.sessionUpdate(session, function (sessionobject) {
-                console.log('session successfully created in DB: ', sessionobject);
-                res.end({auth_url: authorization_url, session: session.sessionId});
+//                console.log('session successfully created in DB: ', sessionobject);
+//                console.log("session returned to the client:", session.properties.sessionId);
+                res.end(JSON.stringify({auth_url: authorization_url, session: session.properties.sessionId}));
             }); 
         });
         app.get('/callback', function (req, res) {
@@ -334,22 +437,30 @@ async.waterfall([
             res.end('authentication happened');
         });
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
+//            console.log("getfilledtemplate session: ", req.body.sessionId);
             var sessionId = req.body.sessionId;
-            
+//            console.log('sessionId from background -> getfilledtemplate: ', sessionId); 
             //  execute doc commands to substitute text on the file
 
             dbCaller.getAndSet(sessionId, { originalId: req.body.id }, function () {
-                console.log("set ${sessionId} with originalId to ${req.body.id}");
+                console.log("set sessionId to something...", req.body.id);
             });
 
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
-            var sessionId = req.body.sessionId;
+
+            dbCaller.getAndSet(sessionId, { fields: fields }, function () {
+                console.log('set the fields property in session');
+            });
+
             var result = res;
             var tempfile_title = "temp copy " + new Date() + "  " + req.body.id;
             
-            function fillinCopy (fileId, callback) {
+            function fillinCopy (fileId, fields, callback) {
+//                console.log('in fillinCopy, fileId is: ', fileId);
+//                console.log('in fillinCopy, fields is: ', fields);
+                
                 service.files.get({
                     auth: oauth2Client,
                     fileId: fileId,
@@ -358,6 +469,7 @@ async.waterfall([
                     if (err) {
                         console.log("error getting the file from drive: ", err); 
                     } else {
+//                        console.log('returned from API get in fillinCopy: ', file);
                         script.scripts.run({
                             auth: oauth2Client,
                             scriptId: API_SCRIPT_EXECUTION_PROJECT_ID,
@@ -369,7 +481,9 @@ async.waterfall([
                             if (err) {
                                 console.log("error using the app script execution api: ", err);    
                             } else {
-                                console.log("resp to script call: ", resp); 
+//                                console.log("resp to fillinCopy call: ", resp); 
+//                                console.log('resp details: ', resp.error.details);
+//                                console.log('resp stacktrace: ', resp.error.details[0].scriptStackTraceElements);
                                 callback(resp.response.result);
                             }
                         });
@@ -380,6 +494,9 @@ async.waterfall([
             //  copy the template file into a temp directory
 
             getTempFolder(function (folderId) {
+                dbCaller.getAndSet(sessionId, {templatefolderPath: folderId}, function () {
+                    console.log("set templatefolderPath to: ", folderId);
+                });
                 service.files.copy({
                     auth: oauth2Client,
                     fileId: req.body.id,
@@ -392,15 +509,17 @@ async.waterfall([
                         if (err) {
                             console.log("error copying the template file: " + err);
                         }
-                        dbCaller.getAndSet(session.sessionId, { copyId: file.id }, function () {
-                            console.log("set ${session.sessionId} copyId to ${file.id}");
+                        dbCaller.getAndSet(sessionId, { copyId: file.id }, function () {
+                            console.log("set copyId to: ", file.id);
                         });
-    
-                        fillinCopy(file.id, function (copyId) {
+                        
+//                        console.log('file.id being passed to fillinCopy: ', file.id);
+ 
+                        fillinCopy(file.id, fields, function (copyId) {
                             //  return the PDF to the extension to be attached to the email
                             exportFileIdToPdf(copyId, function (fileLocation) {
-                                dbCaller.getAndSet(session.sessionId, { pdfPath: fileLocation }, function () {
-                                    console.log("set ${session.sessionId} with pdfPath to ${fileLocation}");
+                                dbCaller.getAndSet(sessionId, { pdfPath: fileLocation }, function () {
+//                                    console.log("set pdfPath to", fileLocation);
                                 });
                                 result.download(fileLocation, 'stupidfile.pdf', function (err) {
                                     if (err) {
@@ -507,7 +626,7 @@ async.waterfall([
                         fields: 'id'
                     }, function (err, file) {
                         if (err) {
-                            console.log(err);
+                            console.log("error in getfields call to API: ", err);
                         } else {
                             res.end(JSON.stringify(file.fields));
                         }
@@ -515,12 +634,8 @@ async.waterfall([
                 }
             })
         });
-        //  need to change this to list files that the application has created when desired
-        //      some kind of flag, so this function can still be used to access the whole google drive for the user to 'upload' a contract from there
         app.get('/listfiles', function (req, res) {
             var service = google.drive('v3');
-            //  this is to so that you can list just hermesis files or all files in case
-            //      I include a way to convert a document to a template inside the extension
             /*
             if (req.body.hermesislist === true) {
                 var query: "properties has { key='hermesis_template' and value='true'} ";
@@ -547,6 +662,57 @@ async.waterfall([
                 }
             });
         });
+        app.post('/emailsent', upload.single(), function (req, res) {
+            var service = google.drive('v3');
+
+            var messageId = req.body.messageId;
+            var sessionId = req.body.sessionId;
+            
+//            gmailApiHelper.getGmailMessage(messageId, function (responseId) {
+//            })
+            gmailApiHelper.checkForHermesisLabel(function (labelid) {
+                gmailApiHelper.labelEmail(messageId, labelid, function () {
+                    console.log('email has been labled with hermesis');
+                    res.end(responseId);
+                });
+            });
+        });
+
+//            console.log('emailsent called: ', messageId);
+/*
+            gmail.users.messages.get({
+                auth: oauth2Client,
+                userId: 'me',
+                id: messageId
+            }, function (err, response) {
+                if (err) {
+                    console.log('error calling gmail API to get email', err);    
+                } else {
+                    console.log('emailsent calls gmail api, returns: ', response);
+                    res.end(response.id);
+                }
+*/
+                //  response is a users.messages.resource
+/*
+                service.files.create({
+                    auth: oauth2Client,
+                    resource: metadata,
+                    media: media,
+                    uploadType: 'multipart',
+                    fields: 'id'
+                }, function (err, response) {
+                    res.end('id of archive file:', response.id);
+                });
+*/
+
+
+//  gmail.users.messages.attachments.get : get attachments for messageId
+//  gmail.users.messages.get : get message for messageId
+//  gmail.users.messages.modify : change labels for messageId
+
+            //  I need to write a file to the drive archive
+            //  I need to hit teh gmail API to get all the info about teh file
+            //     in order to write it correctly
         callback();
     },
 ], function (err, result) {
@@ -560,66 +726,4 @@ async.waterfall([
         })
     }
 });
-
-/*
-        //  deletion candidate
-        app.get('/createfolder', function (req, res) {
-            var service = google.drive('v3');
-            var metadata = {
-                'name': 'testfolder',
-                'mimeType': 'application/vnd.google-apps.folder',
-                'properties': {
-                    hermesis_folder: true
-                }
-            };
-            var result = service.files.create({
-                auth: oauth2Client,
-                resource: metadata,
-                fields: 'id'
-            });
-            res.send("The folder was created with ID", result);
-        });
-        //  deletion candidate
-        app.post('/downloadfile', upload.single('id'), function (req, res) {
-            var fileid = req.body.id;
-            var service = google.drive('v3');
-            service.files.get({
-                auth: oauth2Client,
-                fileId: fileid,
-                fields: "webContentLink"
-            }, function (err, response) {
-                if (err) {
-                    console.log("error downloading from Drive: ", err);        
-                } else {
-                    res.end(response.webContentLink);
-                }
-            });
-        });
-*/
-
-        //  deletion candidate
-/*
-        app.post('/uploadfile', upload.single("uploadedfile"), function (req, res) {
-            var service = google.drive('v3');
-            var metadata = {
-                name: req.file.originalname,
-                description: 'upload a file that the user selects on an upload dialog',
-                properties: {
-                    hermesis_template: true
-                } 
-            };
-            
-            service.files.create({
-                auth: oauth2Client,
-                uploadType: 'multipart',
-                resource: metadata,
-                media: {
-                    mimeType: req.file.mimetype, 
-                    body: fs.createReadStream(req.file.path)
-                }
-            });
-            console.log(req.file);
-            res.end("file saved to Google Drive");
-        });
-*/  
 
