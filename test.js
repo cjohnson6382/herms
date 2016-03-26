@@ -25,6 +25,15 @@ var OAuth2 = google.auth.OAuth2;
 var oauth2Client;
 var authorization_url;
 
+var scopes = [
+    'https://www.googleapis.com/auth/drive.appdata',
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.metadata',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/documents',
+    'https://www.googleapis.com/auth/gmail.modify'
+];
+
 function generateSessionId (callback) {
     var hash = crypto.createHash('md5');
     //  hashing the date to create a 'unique' value - so bad; 
@@ -391,11 +400,11 @@ async.waterfall([
         app.get('/auth', function (req, res) {
             res.writeHead(200, {'Access-Control-Allow-Origin' : '*'});
             var session = new SessionObject();
-            dbCaller.sessionUpdate(session, function (sessionobject) {
-//                console.log('session successfully created in DB: ', sessionobject);
-//                console.log("session returned to the client:", session.properties.sessionId);
+
+            set = new UpdateQuery('session', { sessionId: session.properties.sessionId }, { session: session});
+            set.query(function () {
                 res.end(JSON.stringify({auth_url: authorization_url, session: session.properties.sessionId}));
-            }); 
+            });
         });
         app.get('/callback', function (req, res) {
             //  a new session with a sessionId
@@ -413,16 +422,18 @@ async.waterfall([
 //            console.log('sessionId from background -> getfilledtemplate: ', sessionId); 
             //  execute doc commands to substitute text on the file
 
-            dbCaller.getAndSet(sessionId, { originalId: req.body.id }, function () {
-                console.log("set sessionId to something...", req.body.id);
+            setoriginalid = new GetAndSet('session', {sessionId: sessionId}, { originalId: req.body.id });
+            setoriginalid.query(function (result) {
+                console.log("set sessionId to something...", result);
             });
 
             var service = google.drive('v3');
             var script = google.script('v1');
             var fields = req.body.fields;
 
-            dbCaller.getAndSet(sessionId, { fields: fields }, function () {
-                console.log('set the fields property in session');
+            setfields new GetAndSet('session', {sessionId: sessionId}, {fields: fields});
+            setfields.query(function (result) {
+                console.log('set the fields property in session', result);
             });
 
             var result = res;
@@ -465,9 +476,11 @@ async.waterfall([
             //  copy the template file into a temp directory
 
             getTempFolder(function (folderId) {
-                dbCaller.getAndSet(sessionId, {templatefolderPath: folderId}, function () {
-                    console.log("set templatefolderPath to: ", folderId);
+                settemplatefolderpath = new GetAndSet('session', {sessionId: sessionId}, {templatefolderPath: folderId});
+                settemplatefodlerpath.query(function (result) {
+                    console.log("set templatefolderPath to: ", result);
                 });
+
                 service.files.copy({
                     auth: oauth2Client,
                     fileId: req.body.id,
@@ -480,18 +493,20 @@ async.waterfall([
                         if (err) {
                             console.log("error copying the template file: " + err);
                         }
-                        dbCaller.getAndSet(sessionId, { copyId: file.id }, function () {
-                            console.log("set copyId to: ", file.id);
+
+                        setcopyid = new GetAndSet('session', { sessionId: sessionId }, {copyId: file.id });
+                        setcopyid.query(function (result) {
+                            console.log("set copyId to: ", result);
                         });
-                        
-//                        console.log('file.id being passed to fillinCopy: ', file.id);
- 
+
                         fillinCopy(file.id, fields, function (copyId) {
                             //  return the PDF to the extension to be attached to the email
                             exportFileIdToPdf(copyId, function (fileLocation) {
-                                dbCaller.getAndSet(sessionId, { pdfPath: fileLocation }, function () {
-//                                    console.log("set pdfPath to", fileLocation);
+                                setpdfpath = new GetAndSet('session', { sessionId: sessionId }, { pdfPath: fileLocation });
+                                setpdfpath.query(function (result) {
+                                    console.log("set pdfPath to", result);
                                 });
+
                                 result.download(fileLocation, 'stupidfile.pdf', function (err) {
                                     if (err) {
                                         console.log('error sending download: ' + err);
@@ -569,11 +584,14 @@ async.waterfall([
                        if (err) {
                            console.log("error updating metadata", err);
                        } else {
-                           console.log("successfully updated metadata: ", file.id);
-                           dbCaller.getAndSet(sessionId, { fields: JSONlocation }, function () {
-                               console.log('successfully created the JSON file for template ${req.body.id}: ', JSONlocation);
-                           });
-                           res.end(file.id);
+                            console.log("successfully updated metadata: ", file.id);
+                            
+                            setjsonpath = new GetAndSet('session', { sessionId: sessionId }, { fields: JSONlocation });
+                            setjsonpath.query(function (result) {
+                               console.log('successfully created the JSON file for template ${req.body.id}: ', result);
+                            });
+
+                            res.end(file.id);
                        }
                    })
                 }
