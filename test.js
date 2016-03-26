@@ -16,28 +16,13 @@ var google = require('googleapis');
 var mongo = require('mongodb');
 var crypto = require('crypto');
 
+var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
+
 //  OAuth with the googleapis npm; don't need the separate google auth NPM
 var OAuth2 = google.auth.OAuth2;
 var oauth2Client;
-
 var authorization_url;
-// var config_folder;
 
-var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
-
-//  delete me
-//var TEMP_FOLDER = "placeholder for the temp folder's id";
-
-var scopes = [
-    'https://www.googleapis.com/auth/drive.appdata',
-    'https://www.googleapis.com/auth/drive.file',
-    'https://www.googleapis.com/auth/drive.metadata',
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/documents',
-    'https://www.googleapis.com/auth/gmail.modify'
-];
-
-/////////////////////////////////////
 function generateSessionId (callback) {
     var hash = crypto.createHash('md5');
     //  hashing the date to create a 'unique' value - so bad; 
@@ -183,7 +168,8 @@ var gmailApiHelper = (function () {
 var dbCaller = (function () {
     var COLLECTION;
     var DB;
-    var COLLECTION_NAME = 'session_data'; 
+    var SESSION_COLLECTION = 'session_data'; 
+    var AUTH_COLLECTION = 'stored_auth_tokens';
     return {
         initializeDb: function (callback) {
             that = this;
@@ -197,7 +183,7 @@ var dbCaller = (function () {
                         throw err;
                     } else {
                         DB = db;
-                        that.getCollection(DB, COLLECTION_NAME, function (collection) {
+                        that.getCollection(DB, SESSION_COLLECTION, function (collection) {
                            console.log("getCollection returns a collection object");
                         });
                     }
@@ -317,8 +303,6 @@ var dbCaller = (function () {
     };
 })();
 
-
-//////////////////////////////////////
 function getTempFolder (callback) {
     var service = google.drive('v3');
     var query = 'properties has { key="hermesis_folder" and value="true" } and mimeType="application/vnd.google-apps.folder" and name="temp"';
