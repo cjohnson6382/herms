@@ -1,3 +1,5 @@
+"use strict";
+
 //  needed to get the client_secret.json which has the user credentials
 var fs = require('fs');
 var async = require('async');
@@ -162,146 +164,131 @@ var gmailApiHelper = (function () {
     }
 })();
 
-//  you have to create a DB named session_db before you can use this code;
-//      creating a DB in the mongo shell is easy: 'use session_db' will create the DB
-//      and select it if it doesn't exist already
-var dbCaller = (function () {
-    var COLLECTION;
-    var DB;
-    var SESSION_COLLECTION = 'session_data'; 
-    var AUTH_COLLECTION = 'stored_auth_tokens';
-    return {
-        initializeDb: function (callback) {
-            that = this;
-            try {
-                console.log("initializing the DB");
-                var client = mongo.MongoClient;
-                var url = 'mongodb://localhost:27017/session_db';
-                client.connect(url, function (err, db) {
-                    if (err) { 
-                        console.log("error connecting to the DB: ", err); 
-                        throw err;
-                    } else {
-                        DB = db;
-                        that.getCollection(DB, SESSION_COLLECTION, function (collection) {
-                           console.log("getCollection returns a collection object");
-                        });
-                    }
-                });
-            } catch (e) {
-                console.log('cannot initialize the DB: ', e);
-            }       
-        },
-//
-        createCollection: function (db, collection_name, callback) {
-            db.createCollection(collection_name, function (err, collection) {
-                if (err) {
-                    console.log("error creating collection: ", err);
-                } else {
-                    console.log("collection: ", collection.constructor);    
-                    callback();
-                }
-            }); 
-        },
-//
-        getCollection: function (db, collection_name, callback) {
-            try {
-                COLLECTION = db.collection(collection_name);
-//                console.log("COLLECTION after assignment: ", COLLECTION);
-                callback(COLLECTION);
-            } catch (e) {
-                console.log("collection session_data does not exist: ", e);
-                this.createCollection(collection_name, function () {
-                    COLLECTION = db.collection(collection_name);
-                    callback(COLLECTION);
-                });
-            }
-        },
-//
-        checkWhetherInitialized: function (callback) {
-            try {
-                if (!COLLECTION) { 
-                    throw 'COLLECTION not set... setting it now' 
-                } else { callback() }
-            } catch (e) {
-                console.log("no collection object set; initializing DB", e);
-                this.initializeDb(callback);
-            }
-        },
-//
-        sessionUpdate: function (session, callback) {
-            //  update an existing db entry
-            this.checkWhetherInitialized(function () {
-                var filter = {sessionId: session.properties.sessionId};
-                var data = { $set: {sessionId: session.properties.sessionId, session: session} };
-//                console.log("parts of the query:", filter, data);
-                COLLECTION.updateOne(filter, data, {upsert: true}, function (err, results) {
-                    if (err) {
-                        console.log("error updating DB: ", err)
-                    } else {
-                        //  console.log("updated sessionId, results are: ", results.result);
-                        callback(results.result);
-                    }
-                });
-            });
-        }, 
-//
-        sessionRetrieve: function (sessionId, callback) {
-            this.checkWhetherInitialized(function () {
-//                console.log("this is the session ID used for sessionRetrieve: ", sessionId);
-                try {
-                    COLLECTION.findOne({'sessionId': sessionId}, function (err, item) {
-                        if (err) {
-                            console.log("error retrieving from DB: ", err);
-                        } else {    
-//                            console.log("DB response to the DB query: ", item);
-                            callback(item.session);
-                        }
-                    });
-                } catch (e) {
-                    console.log("collection.findOne failed: ", e);
-                }
-            });
-        },
-//
-        expireSession: function (sessionId, callback) {
-            this.checkWhetherInitialized(function () {
-                //  there is no column named sessionId; need to do that
-                COLLECTION.deleteOne({sessionId: session.sessionId}, callback);
-            })
-        },
-//
-        getAndSet: function (sessionId, updateobject, callback) {
-            var that = this;
-//            console.log('ID used for getAndSet: ', sessionId);
-            try {
-                that.sessionRetrieve(sessionId, function (retrievedsession) { 
-//                    console.log("session retrieved in getAndSet: ", retrievedsession);
-                    SessionObject.update(retrievedsession, updateobject, function (finalsession) {
-//                        console.log('getAndSet: finalsession inserted: ', finalsession);
-                        that.sessionUpdate(finalsession, function (updatestatus) {
-//                           console.log('status of sessionUpdate when getAndSet calls:', updatestatus);
-                            callback();
-                        });               
-                    });
-                });
-            } catch(e) {
-                console.log('the error in sessionRetrieve was not nonexistant', e);
-            }
-        },
-//
-        closeDb: function (callback) {
-            DB.close(false, function (err, result) {
-                if (err) {
-                    console.log('error closing: ', err);
-                } else {
-                    console.log('database is closed', result);
-                    callback();
-                }
-            });
+class DbQuery {
+    constructor (collection, filter, data) {
+        this.collection = this._setcollection(collection);
+        this.filter = filter;
+        this.data = data;
+        DbQuery.initializeDb(function (db) {
+            this.db = db;
+        });
+        const SESSION_COLLECTION = 'session_data';
+        const AUTH_COLLECTION = 'stored_auth_tokens';
+   }
+
+    static initializeDb (callback) {
+        // if the DB is initializd already, do nothing, return DB object
+        if (this.db) {
+            callback(this.db);
+        } else {
+           that = this;
+           try {
+               console.log("initializing the DB");
+               var client = mongo.MongoClient;
+               var url = 'mongodb://localhost:27017/session_db';
+               client.connect(url, function (err, db) {
+                   if (err) { 
+                       console.log("error connecting to the DB: ", err); 
+                       throw new Error(err);
+                   } else {
+                        db.on('close', function () {
+                            db = null;
+                        }); 
+                        this.db = db; 
+                        callback(db);
+                   }   
+               }); 
+           } catch (e) {
+               console.log('cannot initialize the DB: ', e); 
+           }   
+        }   
+    }   
+
+    _setcollection (collection) {
+        if (collection === 'session') {
+           this.collection = DbQuery.SESSION_COLLECTION;
+        } else if (collection === 'auth') {
+            this.collection = DbQuery.AUTH_COLLECTION;
+        } else {
+            throw new Error('collection paraeter is not valid; use session or auth');
         }
-    };
-})();
+    }
+
+    query () {
+        console.log('this is an abstract method');
+    }
+
+    go (callback) {
+        DbQuery.initializeDb(function () {
+            this.query(callback);
+        });
+    }
+
+    close (callback) {
+        DB.close(false, function (err, result) {
+            if (err) {
+                console.log('error closing: ', err);
+            } else {
+                console.log('database is closed', result);
+                callback();
+            }
+        });
+    }
+
+    expireSession (filter, callback) {
+        this.db.collection(this.collection).deleteOne(filter, callback);
+    }
+}
+
+class RetrieveQuery extends DbQuery {
+    query (callback) {
+        try {
+            this.db.collection(this.collection).findOne(this.filter, function (err, item) {
+                if (err) {
+                    throw new Error(err);
+                } else {
+                    callback(item.session);
+                }
+            });
+        } catch (err) {
+            console.log('err in instance of RetrieveQuery.query: ', this.filter, this.collection);
+            throw new Error(err);
+        }
+    }
+}
+
+class UpdateQuery extends DbQuery {
+    query (callback) {
+        try {
+            this.db.collection(this.collection).updateOne(this.filter, this.data, {upsert: true}, function (err, results) {
+                if (err) {
+                    throw new Error(err);
+                } else {
+                    callback(results.result);
+                }
+            });
+        } catch (err) {
+            console.log('UpdateQuery throws err: ', err);
+            throw new Error(err);
+        }
+    }
+}
+
+class GetAndSet extends DbQuery {
+    constructor (collection, filter, data) {
+        super(collection, filter, data);
+        this.get = new RetrieveQuery(collection, filter, data);
+        this.set = new UpdateQuery(collection, filter. data);
+    }
+
+    query (callback) {
+        this.get.query(function (getresult) {
+            this.set.query(function (setresult) {
+                callback(setresult);
+            });
+        });
+    }
+}
 
 function getTempFolder (callback) {
     var service = google.drive('v3');
