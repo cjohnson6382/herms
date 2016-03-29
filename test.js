@@ -1,17 +1,36 @@
 "use strict";
 
+//  LOCAL MODULES   //
+
+
+//  db functions
+var dbhelper = require('./modules/dbHelper.js');
+var DbQuery = dbhelper.DbQuery;
+var RetrieveQuery = dbhelper.RetrieveQuery;
+var UpdateQuery = dbhelper.UpdateQuery;
+var GetAndSet = dbhelper.GetAndSet;
+
+//  functions for doing the gmail API
+var gmailApiHelper = require('./modules/gmailApiHelper.js').gmailApiHelper;
+
+//  session and auth objects
+var SessionObject = require('./modules/objectHelper.js').SessionObject;
+var AuthObject = require('./modules/objectHelper.js').AuthObject;
+
+
+
+
+//  GLOBAL MODULES  //
+
 //  needed to get the client_secret.json which has the user credentials
 var fs = require('fs');
 var async = require('async');
 var https = require('https');
-//  var httprequest = require('request');
 var express = require('express');
 var multer = require('multer');
 var app = express();
 var upload = multer({ dest: 'uploads/' });
-//  var stream = require('stream');
 var bodyParser = require('body-parser');
-
 var urlencodedParser = bodyParser.urlencoded({ extended: false });
 //  this is how you get access to all of the google APIs; use it to do all the API calls
 var google = require('googleapis');
@@ -20,7 +39,6 @@ var crypto = require('crypto');
 
 var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
 
-//  OAuth with the googleapis npm; don't need the separate google auth NPM
 var OAuth2 = google.auth.OAuth2;
 var oauth2Client;
 var authorization_url;
@@ -33,271 +51,6 @@ var scopes = [
     'https://www.googleapis.com/auth/documents',
     'https://www.googleapis.com/auth/gmail.modify'
 ];
-
-function generateSessionId (callback) {
-    var hash = crypto.createHash('md5');
-    //  hashing the date to create a 'unique' value - so bad; 
-    //      this should:
-    //          get a unique identifier from the DB and return that
-    var data = new Date();  
-    hash.on('readable', () => {
-        var hashed = hash.read();
-        if (hashed) {
-            console.log('hashed your data', hashed.toString('hex'));
-            callback(hashed.toString('hex'));
-        }
-    });
-    hash.write(data.toString());
-    hash.end();
-}
-
-function SessionObject () {
-    this.properties = {
-        sessionId: '',
-        originalId: '',
-        copyId: '',
-        pdfPath: '',
-        templatefolderPath: '',
-        fields: ''
-    };
-
-    var that = this;
-    generateSessionId(function (generatedId) {
-//        console.log("return from generateId: ", generatedId);
-        that.properties.sessionId = generatedId;
-    });
-   
-}
-
-SessionObject.update = function (session, updateobject, callback) {
-//    for (var key in Object.keys(updateobject)) {
-    for (var key in updateobject) {
-        if (session.properties.hasOwnProperty(key)) {
-//            console.log('SessionObject.update is successful', key);
-            session.properties[key] = updateobject[key];
-        } else {
-            console.log("updateobject used:", updateobject);
-        }
-    }
-    callback(session);
-}
-
-var gmailApiHelper = (function () {
-    var GMAIL = google.gmail('v1');
-    return {
-        createAppLabel: function (callback) {
-            GMAIL.users.labels.create({
-                auth: oauth2Client,
-                userId: 'me',
-                fields: 'id, name',
-                resource: {
-                    labelListVisibility: 'labelHide',
-                    messageListVisibility: 'hide',
-                    name: 'hermesis'
-                }
-            }, function (err, response) {
-                if (err) {
-                    console.log('error creating the hermesis label in user inbox', err);
-                } else {
-                    console.log('successfully created hermesis label in user inbox', response);
-                    callback();
-                }
-            });
-        },
-        labelEmail: function (messageId, labelId, callback) {
-            console.log('labelEmail messageId: ', messageId, labelId);
-            GMAIL.users.messages.modify({
-                auth: oauth2Client,
-                userId: 'me',
-                id: messageId,
-                resource: {
-                    addLabelIds: [labelId]
-                }
-            }, function (err, response) {
-                if (err) {
-                    console.log('error labeling the supplied email with Hermesis', err); 
-                } else {
-                    console.log('email labeled with hermesis: ', response);
-                }
-            });
-        },
-        getGmailMessage: function (messageId, callback) {
-            GMAIL.users.messages.get({
-                auth: oauth2Client,
-                userId: 'me',
-                id: messageId
-            }, function (err, response) {
-                if (err) {
-                    console.log('error calling gmail API: ', err);
-                } else {
-                    console.log('gmail api successfully called: ', response);
-                    callback(response.id);
-                }
-            });
-        },
-        checkForHermesisLabel: function (callback) {
-            GMAIL.users.labels.list({
-                auth: oauth2Client,
-                userId: 'me',
-            }, function (err, response) {
-                if (err) {
-                    console.log('error checking for hermesis label: ', err);
-                } else {
-//                    console.log('response.labels in checkForHermesisLabel: ', response);
-                    var names = {};
-                    response.labels.map(function (obj) {
-                        names[obj.name] = obj.id;
-                    });
-                    console.log('names in the checkforhermesislabel function: ', names);
-                    var labelnames = Object.keys(names);
-                    var hermesis_present = labelnames.indexOf('hermesis');
-                    if (hermesis_present === -1) {
-                        gmailApiHelper.createAppLabel(function () {
-                            console.log('created label');
-                            callback(names['hermesis']);
-                        });
-                    } else {
-                        console.log('label already exists');
-                        callback(names['hermesis']);
-                    }
-                }
-            });
-//  check whether the hermesis label exists, return if it does, create if it doesn't:
-//      when you list labels, it returns an array of objects:
-//          labelslist.map(function (current) {
-//              return current.name;
-//          });;
-
-
-        },
-    }
-})();
-
-class DbQuery {
-    constructor (collection, filter, data) {
-        this.collection = this._setcollection(collection);
-        this.filter = filter;
-        this.data = data;
-        DbQuery.initializeDb(function (db) {
-            this.db = db;
-        });
-        const SESSION_COLLECTION = 'session_data';
-        const AUTH_COLLECTION = 'stored_auth_tokens';
-   }
-
-    static initializeDb (callback) {
-        // if the DB is initializd already, do nothing, return DB object
-        if (this.db) {
-            callback(this.db);
-        } else {
-           that = this;
-           try {
-               console.log("initializing the DB");
-               var client = mongo.MongoClient;
-               var url = 'mongodb://localhost:27017/session_db';
-               client.connect(url, function (err, db) {
-                   if (err) { 
-                       console.log("error connecting to the DB: ", err); 
-                       throw new Error(err);
-                   } else {
-                        db.on('close', function () {
-                            db = null;
-                        }); 
-                        this.db = db; 
-                        callback(db);
-                   }   
-               }); 
-           } catch (e) {
-               console.log('cannot initialize the DB: ', e); 
-           }   
-        }   
-    }   
-
-    _setcollection (collection) {
-        if (collection === 'session') {
-           this.collection = DbQuery.SESSION_COLLECTION;
-        } else if (collection === 'auth') {
-            this.collection = DbQuery.AUTH_COLLECTION;
-        } else {
-            throw new Error('collection paraeter is not valid; use session or auth');
-        }
-    }
-
-    query () {
-        console.log('this is an abstract method');
-    }
-
-    go (callback) {
-        DbQuery.initializeDb(function () {
-            this.query(callback);
-        });
-    }
-
-    close (callback) {
-        DB.close(false, function (err, result) {
-            if (err) {
-                console.log('error closing: ', err);
-            } else {
-                console.log('database is closed', result);
-                callback();
-            }
-        });
-    }
-
-    expireSession (filter, callback) {
-        this.db.collection(this.collection).deleteOne(filter, callback);
-    }
-}
-
-class RetrieveQuery extends DbQuery {
-    query (callback) {
-        try {
-            this.db.collection(this.collection).findOne(this.filter, function (err, item) {
-                if (err) {
-                    throw new Error(err);
-                } else {
-                    callback(item.session);
-                }
-            });
-        } catch (err) {
-            console.log('err in instance of RetrieveQuery.query: ', this.filter, this.collection);
-            throw new Error(err);
-        }
-    }
-}
-
-class UpdateQuery extends DbQuery {
-    query (callback) {
-        try {
-            this.db.collection(this.collection).updateOne(this.filter, this.data, {upsert: true}, function (err, results) {
-                if (err) {
-                    throw new Error(err);
-                } else {
-                    callback(results.result);
-                }
-            });
-        } catch (err) {
-            console.log('UpdateQuery throws err: ', err);
-            throw new Error(err);
-        }
-    }
-}
-
-class GetAndSet extends DbQuery {
-    constructor (collection, filter, data) {
-        super(collection, filter, data);
-        this.get = new RetrieveQuery(collection, filter, data);
-        this.set = new UpdateQuery(collection, filter. data);
-    }
-
-    query (callback) {
-        this.get.query(function (getresult) {
-            this.set.query(function (setresult) {
-                callback(setresult);
-            });
-        });
-    }
-}
 
 function getTempFolder (callback) {
     var service = google.drive('v3');
@@ -401,7 +154,7 @@ async.waterfall([
             res.writeHead(200, {'Access-Control-Allow-Origin' : '*'});
             var session = new SessionObject();
 
-            set = new UpdateQuery('session', { sessionId: session.properties.sessionId }, { session: session});
+            set = new UpdateQuery('session', { sessionId: session.properties.sessionId }, { session: session });
             set.query(function () {
                 res.end(JSON.stringify({auth_url: authorization_url, session: session.properties.sessionId}));
             });
@@ -657,10 +410,8 @@ async.waterfall([
             var messageId = req.body.messageId;
             var sessionId = req.body.sessionId;
             
-//            gmailApiHelper.getGmailMessage(messageId, function (responseId) {
-//            })
-            gmailApiHelper.checkForHermesisLabel(function (labelid) {
-                gmailApiHelper.labelEmail(messageId, labelid, function () {
+            gmailApiHelper.checkForHermesisLabel(oauth2Client, function (labelid) {
+                gmailApiHelper.labelEmail(oauth2Client, messageId, labelid, function () {
                     console.log('email has been labled with hermesis');
                     res.end(responseId);
                 });
@@ -715,4 +466,279 @@ async.waterfall([
         })
     }
 });
+
+
+
+/*
+function generateSessionId (callback) {
+    var hash = crypto.createHash('md5');
+    //  hashing the date to create a 'unique' value - so bad; 
+    //      this should:
+    //          get a unique identifier from the DB and return that
+    var data = new Date();  
+    hash.on('readable', () => {
+        var hashed = hash.read();
+        if (hashed) {
+            console.log('hashed your data', hashed.toString('hex'));
+            callback(hashed.toString('hex'));
+        }
+    });
+    hash.write(data.toString());
+    hash.end();
+}
+
+function SessionObject () {
+    this.properties = {
+        sessionId: '',
+        originalId: '',
+        copyId: '',
+        pdfPath: '',
+        templatefolderPath: '',
+        fields: ''
+    };
+
+    var that = this;
+    generateSessionId(function (generatedId) {
+//        console.log("return from generateId: ", generatedId);
+        that.properties.sessionId = generatedId;
+    });
+   
+}
+
+SessionObject.update = function (session, updateobject, callback) {
+//    for (var key in Object.keys(updateobject)) {
+    for (var key in updateobject) {
+        if (session.properties.hasOwnProperty(key)) {
+//            console.log('SessionObject.update is successful', key);
+            session.properties[key] = updateobject[key];
+        } else {
+            console.log("updateobject used:", updateobject);
+        }
+    }
+    callback(session);
+}
+*/
+
+/*
+
+var gmailApiHelper = (function () {
+    var GMAIL = google.gmail('v1');
+    return {
+        createAppLabel: function (callback) {
+            GMAIL.users.labels.create({
+                auth: oauth2Client,
+                userId: 'me',
+                fields: 'id, name',
+                resource: {
+                    labelListVisibility: 'labelHide',
+                    messageListVisibility: 'hide',
+                    name: 'hermesis'
+                }
+            }, function (err, response) {
+                if (err) {
+                    console.log('error creating the hermesis label in user inbox', err);
+                } else {
+                    console.log('successfully created hermesis label in user inbox', response);
+                    callback();
+                }
+            });
+        },
+        labelEmail: function (messageId, labelId, callback) {
+            console.log('labelEmail messageId: ', messageId, labelId);
+            GMAIL.users.messages.modify({
+                auth: oauth2Client,
+                userId: 'me',
+                id: messageId,
+                resource: {
+                    addLabelIds: [labelId]
+                }
+            }, function (err, response) {
+                if (err) {
+                    console.log('error labeling the supplied email with Hermesis', err); 
+                } else {
+                    console.log('email labeled with hermesis: ', response);
+                }
+            });
+        },
+        getGmailMessage: function (messageId, callback) {
+            GMAIL.users.messages.get({
+                auth: oauth2Client,
+                userId: 'me',
+                id: messageId
+            }, function (err, response) {
+                if (err) {
+                    console.log('error calling gmail API: ', err);
+                } else {
+                    console.log('gmail api successfully called: ', response);
+                    callback(response.id);
+                }
+            });
+        },
+        checkForHermesisLabel: function (callback) {
+            GMAIL.users.labels.list({
+                auth: oauth2Client,
+                userId: 'me',
+            }, function (err, response) {
+                if (err) {
+                    console.log('error checking for hermesis label: ', err);
+                } else {
+//                    console.log('response.labels in checkForHermesisLabel: ', response);
+                    var names = {};
+                    response.labels.map(function (obj) {
+                        names[obj.name] = obj.id;
+                    });
+                    console.log('names in the checkforhermesislabel function: ', names);
+                    var labelnames = Object.keys(names);
+                    var hermesis_present = labelnames.indexOf('hermesis');
+                    if (hermesis_present === -1) {
+                        gmailApiHelper.createAppLabel(function () {
+                            console.log('created label');
+                            callback(names['hermesis']);
+                        });
+                    } else {
+                        console.log('label already exists');
+                        callback(names['hermesis']);
+                    }
+                }
+            });
+//  check whether the hermesis label exists, return if it does, create if it doesn't:
+//      when you list labels, it returns an array of objects:
+//          labelslist.map(function (current) {
+//              return current.name;
+//          });;
+
+
+        },
+    }
+})();
+
+*/
+
+/*
+class DbQuery {
+    constructor (collection, filter, data) {
+        this.collection = this._setcollection(collection);
+        this.filter = filter;
+        this.data = data;
+        DbQuery.initializeDb(function (db) {
+            this.db = db;
+        });
+        const SESSION_COLLECTION = 'session_data';
+        const AUTH_COLLECTION = 'stored_auth_tokens';
+   }
+
+    static initializeDb (callback) {
+        // if the DB is initializd already, do nothing, return DB object
+        if (this.db) {
+            callback(this.db);
+        } else {
+           that = this;
+           try {
+               console.log("initializing the DB");
+               var client = mongo.MongoClient;
+               var url = 'mongodb://localhost:27017/session_db';
+               client.connect(url, function (err, db) {
+                   if (err) { 
+                       console.log("error connecting to the DB: ", err); 
+                       throw new Error(err);
+                   } else {
+                        db.on('close', function () {
+                            db = null;
+                        }); 
+                        this.db = db; 
+                        callback(db);
+                   }   
+               }); 
+           } catch (e) {
+               console.log('cannot initialize the DB: ', e); 
+           }   
+        }   
+    }   
+
+    _setcollection (collection) {
+        if (collection === 'session') {
+           this.collection = DbQuery.SESSION_COLLECTION;
+        } else if (collection === 'auth') {
+            this.collection = DbQuery.AUTH_COLLECTION;
+        } else {
+            throw new Error('collection paraeter is not valid; use session or auth');
+        }
+    }
+
+    query () {
+        console.log('this is an abstract method');
+    }
+
+    go (callback) {
+        DbQuery.initializeDb(function () {
+            this.query(callback);
+        });
+    }
+
+    close (callback) {
+        DB.close(false, function (err, result) {
+            if (err) {
+                console.log('error closing: ', err);
+            } else {
+                console.log('database is closed', result);
+                callback();
+            }
+        });
+    }
+
+    expireSession (filter, callback) {
+        this.db.collection(this.collection).deleteOne(filter, callback);
+    }
+}
+
+class RetrieveQuery extends DbQuery {
+    query (callback) {
+        try {
+            this.db.collection(this.collection).findOne(this.filter, function (err, item) {
+                if (err) {
+                    throw new Error(err);
+                } else {
+                    callback(item.session);
+                }
+            });
+        } catch (err) {
+            console.log('err in instance of RetrieveQuery.query: ', this.filter, this.collection);
+            throw new Error(err);
+        }
+    }
+}
+
+class UpdateQuery extends DbQuery {
+    query (callback) {
+        try {
+            this.db.collection(this.collection).updateOne(this.filter, this.data, {upsert: true}, function (err, results) {
+                if (err) {
+                    throw new Error(err);
+                } else {
+                    callback(results.result);
+                }
+            });
+        } catch (err) {
+            console.log('UpdateQuery throws err: ', err);
+            throw new Error(err);
+        }
+    }
+}
+
+class GetAndSet extends DbQuery {
+    constructor (collection, filter, data) {
+        super(collection, filter, data);
+        this.get = new RetrieveQuery(collection, filter, data);
+        this.set = new UpdateQuery(collection, filter. data);
+    }
+
+    query (callback) {
+        this.get.query(function (getresult) {
+            this.set.query(function (setresult) {
+                callback(setresult);
+            });
+        });
+    }
+}
+*/
 
