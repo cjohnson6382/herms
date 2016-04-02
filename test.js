@@ -34,8 +34,8 @@ var bodyParser = require('body-parser');
 var urlencodedParser = bodyParser.urlencoded({ extended: false });
 //  this is how you get access to all of the google APIs; use it to do all the API calls
 var google = require('googleapis');
-var mongo = require('mongodb');
-var crypto = require('crypto');
+//var mongo = require('mongodb');
+//var crypto = require('crypto');
 
 var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
 
@@ -49,7 +49,8 @@ var scopes = [
     'https://www.googleapis.com/auth/drive.metadata',
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/documents',
-    'https://www.googleapis.com/auth/gmail.modify'
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/userinfo.profile'
 ];
 
 function getTempFolder (callback) {
@@ -150,13 +151,37 @@ async.waterfall([
                 }
             });
         });
-        app.get('/auth', function (req, res) {
+        app.post('/auth', upload.single(), function (req, res) {
             res.writeHead(200, {'Access-Control-Allow-Origin' : '*'});
             var session = new SessionObject();
+//            console.log('in /auth the body is: ', req.body);
+            var googleid = req.body.googleid;
+            session.properties.googleid = googleid;
+            //  search the auth collection for googleid; if it exists, get the corresponding token and set it as the oauth2Client
+            //      otherwise, continue the auth dance
 
-            set = new UpdateQuery('session', { sessionId: session.properties.sessionId }, { session: session });
-            set.query(function () {
-                res.end(JSON.stringify({auth_url: authorization_url, session: session.properties.sessionId}));
+            //  should also find some way to test whether the key is still good; if it's no good, remove it from the DB -- Later
+            var getauthtoken = new RetrieveQuery('auth', { googleid: googleid }, {});
+            getauthtoken.query(function (retrieved) {
+                try {
+                    if (retrieved.length < 1) {
+                        //  console.log('retrieved is < 1 length: ', retrieved);
+                        throw new Error('DB query did not find a matching google id');
+                    } else {
+                        //  console.log('\n\n\nretrieved in the /auth endpoint: ', retrieved);
+                        oauth2Client = JSON.parse(retrieved.properties.token);
+                        var auth_url = null;
+                    }
+                } catch (e) {
+                    console.log('no stored token; get a new one: ', e);
+                    var auth_url = authorization_url;
+                } finally {
+                    var set = new UpdateQuery('session', { sessionId: session.properties.sessionId }, { session: JSON.stringify(session) });
+                    console.log('parameters for "set" var in /auth: ', session);
+                    set.query(session, function () {
+                        res.end(JSON.stringify({auth_url: authorization_url, session: session.properties.sessionId}));
+                    });
+                }
             });
         });
         app.get('/callback', function (req, res) {
@@ -166,8 +191,26 @@ async.waterfall([
                     console.log('ERR while getting access token', err);
                 }
                 oauth2Client.credentials = token;
+                var emptyauth = new AuthObject();
+
+                //  this doesn't have a 'sub' property
+                var oauth2 = google.oauth2('v2');
+                oauth2.userinfo.v2.me.get({
+                    auth: oauth2Client,
+                    fields: 'id'
+                //    access_token: oauth2Client
+                }, function (err, response) {
+                    if (err) {
+                        console.log('\n\n\nerr getting user id', err);
+                    } else {
+                        var setauthtoken = new UpdateQuery('auth', { googleid: response.id }, { googleid: response.id, token: JSON.stringify(token) });
+                        setauthtoken.query(emptyauth, function (updated) {
+                            console.log('inserted new auth object into DB: ', updated);
+                            res.end('authentication happened');
+                        });
+                    }
+                });
             });
-            res.end('authentication happened');
         });
         app.post('/getfilledtemplate', upload.single(), function (req, res) {
 //            console.log("getfilledtemplate session: ", req.body.sessionId);
@@ -184,7 +227,7 @@ async.waterfall([
             var script = google.script('v1');
             var fields = req.body.fields;
 
-            setfields new GetAndSet('session', {sessionId: sessionId}, {fields: fields});
+            setfields = new GetAndSet('session', {sessionId: sessionId}, {fields: fields});
             setfields.query(function (result) {
                 console.log('set the fields property in session', result);
             });

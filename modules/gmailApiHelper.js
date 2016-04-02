@@ -1,6 +1,7 @@
 'use strict';
 
 var gmailApiHelper = (function () {
+    var google = require('googleapis');
     var GMAIL = google.gmail('v1');
     return {
         createAppLabel: function (oauth2Client, callback) {

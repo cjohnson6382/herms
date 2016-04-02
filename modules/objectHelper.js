@@ -1,7 +1,12 @@
 'use strict';
 
 class DbObject {
+    constructor () {
+        this.properties = {};
+    }
+
     update (updateobject, callback) {
+        console.log('updateobject in DbObject.update: ', updateobject);
         for (var key in updateobject.properties) {
             if (this.properties.hasOwnProperty(key)) {
                 this.properties[key] = updateobject[key];
@@ -16,20 +21,24 @@ class DbObject {
 
 class SessionObject extends DbObject {
     constructor () {
-        _generateSessionId () {function (sessionId) {
-            this.properties = {
+        super();
+        var that = this;
+        this._generateSessionId (function (sessionId) {
+            that.properties = {
                 sessionId: sessionId,
                 originalId: '',
                 copyId: '',
                 pdfPath: '',
                 templatefolderPath: '',
-                fields: ''               
+                fields: '',
+                googleid: '' 
             };
-        }}
+        });
     }
 
-    _generateSessionId () {
-         var hash = crypto.createHash('md5');
+    _generateSessionId (callback) {
+        var crypto = require('crypto');
+        var hash = crypto.createHash('md5');
         //  hashing the date to create a 'unique' value - so bad; 
         //  should instead get the _id field from the DB and return that
         var data = new Date();  
@@ -49,14 +58,15 @@ class SessionObject extends DbObject {
 //  make the constructor for this   ///////////////////
 class AuthObject extends DbObject {
     constructor () {
+        super();
         this.properties = {
-            this.token = '';
-            this.googleid = '';
+            token: '',
+            googleid: ''
         };
     }
 }
 
-modules.export = {
+module.exports = {
     SessionObject: SessionObject,
     AuthObject: AuthObject
 };
