@@ -3,30 +3,30 @@ var genuuid = function () {
         return Math.floor((1 + Math.random()) * 0x10000)
             .toString(16)
             .substring(1);
-    }   
-    return s4() + s4() + '-' + s4() + '-' + 
-        s4() + '-' + s4() + '-' + s4() + s4() + s4();    
+    }
+    return s4() + s4() + '-' + s4() + '-' +
+        s4() + '-' + s4() + '-' + s4() + s4() + s4();
 };
 
 var getContracts = function (oauth2client, callback) {
     var service = google.drive('v3');
     service.files.list({
         auth: oauth2client,
-        pageSize: 10, 
+        pageSize: 10,
         fields: "nextPageToken, files(id, name)",
         q: "properties has { key='hermesis_config' and value='true'} "
     }, function(err, response) {
         if (err) {
             console.log('The API returned an error: ' + err);
             return;
-        }   
+        }
         var files = response.files;
-        if (files.length == 0) {
+        if (files.length === 0) {
             console.log('No files found.');
-        }   
+        }
         else {
             callback(response.files);
-        }   
+        }
     });
 };
 
@@ -90,7 +90,7 @@ var driveUtil = {
             console.log('error writing PDF to temp file: ', err);
         })
         .pipe(dest);
-    }   
+    }
 };
 
 module.exports = {

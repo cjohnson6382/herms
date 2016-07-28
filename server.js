@@ -1,43 +1,35 @@
 "use strict";
 
-//  functions for doing the gmail API
-//  var gmailApiHelper = require('./modules/gmailApiHelper.js').gmailApiHelper;
+var fs = require('fs');
+var https = require('https');
+var express = require('express');
+var app = express();
+var google = require('googleapis');
+var session = require('express-session');
+var MongoStore = require('connect-mongo')(session);
+var passport = require('passport');
+var GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
 
-var genuuid = require('./modules/util.js').genuuid;
+//  var genuuid = require('./modules/util.js').genuuid;
+var genuuid = function () {
+    function s4() {
+        return Math.floor((1 + Math.random()) * 0x10000)
+            .toString(16)
+            .substring(1);
+    }
+    return s4() + s4() + '-' + s4() + '-' +
+        s4() + '-' + s4() + '-' + s4() + s4() + s4();
+};
+
+//  driveUtil is to do some complicated dance to get the final PDF
 var driveUtil = require('./modules/util.js').driveUtil;
 
 //  GLOBAL MODULES  //
 
-var fs = require('fs');
-//  var async = require('async');
-var https = require('https');
-var express = require('express');
 //  var multer = require('multer');
-var app = express();
 //  var upload = multer({ dest: 'uploads/' });
 //  var bodyParser = require('body-parser');
 //  var urlencodedParser = bodyParser.urlencoded({ extended: false });
-
-//  var google = require('googleapis');
-
-//  socket should only be setup when typeahead is called, if possible, so that session
-//      already exists and can be used as key for the socketpool
-//  should namespace the socket so that it doesn't conflict with any other sockets
-//      that exist or come to exist on gmail
-
-//  setupSockets = function (listener) {
-//      listener.sockets.on('connection', function (socket) { 
-//          socketpool.socket = socket.id;
-//          socket.emit('connected', { message: 'socket connected!' }); 
-//          socket.on('disconnect', function () {
-//              delete socketpool[/* session.socket  */];
-//          });
-//      });
-//  }
-var session = require('express-session');
-var MongoStore = require('connect-mongo')(session);
-
-//  var sio = require(socket.io);
 
 
 //  function genuuid -- moved to modules/util.js
@@ -46,10 +38,10 @@ app.use(passport.initialize());
 app.use(session({
     genid: function () {
         return genuuid();
-    },  
+    },
     secret: 'hermesisisgrate',
     name: 'hermesis.sid',
-    store: new MongoStore({ url: 'mongodb://localhost/hermesis' }), 
+    store: new MongoStore({ url: 'mongodb://localhost/hermesis' }),
     maxAge: 1000 * 60 * 60 * 24 * 2,
     resave: false,
     secure: true,
@@ -57,31 +49,27 @@ app.use(session({
 }));
 
 passport.serializeUser(function (user, done) {
-    done(null, { id: user.id, access_token: user.access_token }); 
+    done(null, { id: user.id, access_token: user.access_token });
 });
 
 passport.deserializeUser(function (id, done) {
     User.findById(id, function (err, user) {
         done(null, user);
-    }); 
+    });
 });
 
 //  routes
-var root = require('./routes/root.js');
 var auth = require('./routes/auth.js');
 var callback = require('./routes/callback.js');
 var getfilledtemplate = require('./routes/getfilledtemplate.js');
 var savemetadata = require('./routes/savemetadata.js');
-var getfields = require('./routes/getfields.js');
 var listfiles = require('./routes/listfiles.js');
 
 var routes = [
-    app.use('/', root),
     app.use('/auth', auth),
     app.use('/callback', callback),
     app.use('/getfilledtemplate', getfilledtemplate),
     app.use('/savemetadata', savemetadata),
-    app.use('/getfields', getfields),
     app.use('/listfiles', listfiles),
 ];
 
@@ -98,7 +86,6 @@ fs.readFile('./credentials/client_secret_tvbox.json', function (err, content) {
             };
             
             try {
-
                 https.createServer(options, app.listen(443, function () {
                     console.log('starting the HTTPS server');
                 }));
@@ -108,6 +95,7 @@ fs.readFile('./credentials/client_secret_tvbox.json', function (err, content) {
         
         });
 
+        //  this is the authentication magic; I don't think it passes a URL to the client, which I need right now
         content = JSON.parse(content);
         passport.use(new GoogleStrategy({
             clientID: content.web.client_id,
@@ -121,24 +109,6 @@ fs.readFile('./credentials/client_secret_tvbox.json', function (err, content) {
 
 //  clearly this goes somewhere else
 var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
-
-
-//  var OAuth2 = google.auth.OAuth2;
-//  var oauth2Client;
-//  var authorization_url;
-
-//  removed scopes var, which is now in auth
-
-//  removed 3 functions here moved to modules/util.js
-
-//  socket.io!
-//  var io = require('socket.io');
-
-//  socketIO configuration file?
-//      var cfg = '';
-
-//  track?
-//      
 
 //  on savemetadata:
 //  savemeatadata(function (contractlist) {
