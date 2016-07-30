@@ -1,10 +1,13 @@
+var express = require('express');
+var router = express.router();
+var service = require('googleapis').drive('v3');
+
 //      var io = require('/modules/io.js');
 //      var socketpool = io.socketpool;
 
 //  if you change from post to get, need to change the script on google docs too!!
 //      should probably just use GET so I don't need the urlencodedParser
-app.post('/savemetadata', urlencodedParser, function (req, res) {
-    var service = google.drive('v3');
+router.post('/', urlencodedParser, function (req, res) {
     var JSONlocation;
     var lastmodified;
 
@@ -74,3 +77,5 @@ app.post('/savemetadata', urlencodedParser, function (req, res) {
         res.end(file.id);
     }
 });
+
+module.exports = router;

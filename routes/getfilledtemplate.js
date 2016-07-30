@@ -1,4 +1,8 @@
-app.post('/getfilledtemplate', upload.single(), function (req, res) {
+var express = require('express');
+var router = express.Router();
+var service = require('googleapis').drive('v3');
+
+router.post('/', upload.single(), function (req, res) {
     var service = google.drive('v3');
     var script = google.script('v1');
     var fields = req.body.fields;
@@ -116,3 +120,5 @@ app.post('/getfilledtemplate', upload.single(), function (req, res) {
         );
     });
 });
+
+module.exports = router;
