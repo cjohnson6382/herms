@@ -1,0 +1,31 @@
+var express = require('express');
+var router = express.Router();
+var fs = require('fs');
+var google = require('googleapis');
+var OAuth2 = google.auth.OAuth2;
+
+var scopes = [
+    'https://www.googleapis.com/auth/drive.appdata',
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.metadata',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/documents',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/userinfo.profile'
+];
+
+var auth = function (req, res, next) {
+    if (req.session.access_token) {
+        next();
+    } else {
+        var url = req.oauth2Client.generateAuthUrl({
+            access_type: 'offline',  
+            scope: scopes 
+        });
+    
+        res.writeHead(200, {'Access-Control-Allow-Origin': '*'}); 
+        res.redirect(url);
+    }
+});
+
+module.exports = router;

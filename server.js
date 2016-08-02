@@ -24,48 +24,38 @@ var genuuid = function () {
 //  driveUtil is to do some complicated dance to get the final PDF
 var driveUtil = require('./modules/util.js').driveUtil;
 
-//  GLOBAL MODULES  //
-
 //  var multer = require('multer');
-//  var upload = multer({ dest: 'uploads/' });
 //  var bodyParser = require('body-parser');
 //  var urlencodedParser = bodyParser.urlencoded({ extended: false });
-
-
-//  function genuuid -- moved to modules/util.js
 
 app.use(session({
     genid: function () {
         return genuuid();
     },
+    cookie: {
+        maxAge: 1000 * 60 * 60 * 24 * 2,
+        secure: true
+    },
     secret: 'hermesisisgrate',
     name: 'hermesis.sid',
     store: new MongoStore({ url: 'mongodb://localhost/hermesis' }),
-    maxAge: 1000 * 60 * 60 * 24 * 2,
-    resave: false,
+    resave: true,
     secure: true,
     saveUninitialized: true
 }));
 
-
-var oauthProvider = require('./modules/oauthProvider.js');
-//  routes
-var auth = require('./routes/auth.js');
 var callback = require('./routes/callback.js');
-//  var getfilledtemplate = require('./routes/getfilledtemplate.js');
-//  var savemetadata = require('./routes/savemetadata.js');
 var listfiles = require('./routes/listfiles.js');
+var getfilledtemplate = require('./routes/getfilledtemplate.js');
+//  var savemetadata = require('./routes/savemetadata.js');
 
 var routes = [
-    app.use(oauthProvider),
-    app.use('/auth', auth),
     app.use('/callback', callback),
     app.use('/listfiles', listfiles),
+    app.use('/getfilledtemplate', getfilledtemplate),
 ];
 
-//    app.use('/getfilledtemplate', getfilledtemplate),
 //    app.use('/savemetadata', savemetadata),
-
 
 var promise = Promise.all(routes);
 promise.then(function () {

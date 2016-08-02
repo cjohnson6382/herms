@@ -1,0 +1,23 @@
+var express = require('express');
+var router = express.Router();
+var google = require('googleapis');
+var OAuth2 = google.auth.OAuth2;
+
+router.get('/', function (req, res) {
+    req.auth = new Promise(function (resolve, reject) {
+        req.oauth2Client.getToken(req.query.code, function(err, tokens) {
+            if(!err) {
+                resolve(req.oauth2Client.setCredentials(tokens));
+                res.end('authentication successful');
+            } else {
+                console.log('error retrieving token: ', err);
+            }
+        });
+    });
+    console.log('should be a promise: ', req.auth);
+    console.log('should be an oauth2Client with credentials: ', req.oauth2Client);
+
+    res.redirect(req.session.redirect_originalUrl);
+});
+
+module.exports = router;
