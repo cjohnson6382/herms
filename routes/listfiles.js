@@ -2,7 +2,6 @@ var express = require('express');
 var router = express.Router();    
 var google = require('googleapis');
 var service = google.drive('v3');
-var OAuth2 = google.auth.OAuth2;
 var oauthProvider = require('../modules/oauthProvider.js');
 
 router.use(oauthProvider);
@@ -23,7 +22,7 @@ router.get('/', function (req, res) {
         }
         else {
             console.log('listfiles successfully executed an API call; congratulations you are competent');
-            res.json({ resp: resp.files });
+            res.json({ type: 'listfiles', resp: resp.files });
             res.end();
         }
     });

@@ -1,71 +1,58 @@
 var express = require('express');
-var router = express.router();
-var service = require('googleapis').drive('v3');
+var router = express.Router();
+var google = require('googleapis');
+var service = google.drive('v3');
+
+var bodyParser = require('body-parser');
+var urlencodedParser = bodyParser.urlencoded({ extended: false });
+var oauthProvider = require('../modules/oauthProvider.js');
 
 //      var io = require('/modules/io.js');
 //      var socketpool = io.socketpool;
 
-//  if you change from post to get, need to change the script on google docs too!!
-//      should probably just use GET so I don't need the urlencodedParser
-router.post('/', urlencodedParser, function (req, res) {
-    var JSONlocation;
-    var lastmodified;
+router.use(urlencodedParser);
+router.use(oauthProvider);
 
+router.post('/', function (req, res) {
 
-    var data = prepareData(
-        JSON.parse(req.body.metadataitems), 
-        req.body.docid, 
-        req.body.parentname
-    );
+    console.log('in savemetadata: ', req.session);
 
-    service.files.create({
-        auth: oauth2Client,
-        resource: data.metadata,
-        media: data.media,
-        uploadType: 'multipart',
-        fields: 'id, modifiedByMeTime, parents, name, fileExtension'
-    }, updateJson);
-
-    var prepareData = function (fields, docid, parentname) {
-      var body = JSON.stringify({parentid: docid, fields: fields, name: parentname});
-      var timestamp = new Date();
-      var filename = docid + " -- hermesis template -- " + parentname + ' ' + timestamp.toString() + ".json";
-
-      var metadata = {
-        name: filename,
-        properties: {
-          hermesis_config: true,
-        }
-      };
-
-      var media = {
-          mimeType: 'application/json',
-          body: body
-      };
-
-      return { metadata: metadata, media: media };
+    var resource = {
+        name: req.body.id + 
+            " -- hermesis template -- " + 
+            req.body.name + 
+            " " + 
+            new Date().toString() + 
+            ".json",
+        properties: { hermesis_config: true }
     };
 
-    var updateJson = function (err, file) {
-      if (err) {
-        console.log('error creating JSON for file| file: ', docid, " err: ", err);
-      } else {
-        var metadata = {
-           properties: {
-               fields: file.id,
-               jsonlastedit: file.modifiedByMeTime,
-               hermesis_template: true
-           }
-        };
+    var media = {
+        mimeType: 'application/json',
+        body: JSON.stringify({ 
+            id: req.body.id, 
+            fields: JSON.parse(req.body.fields), 
+            name: req.body.name 
+        })
+    }
 
-        service.files.update({
-           auth: oauth2Client,
-           resource: metadata,
-           fileId: docid
-        }, pushToClient);
+    service.files.create({
+        auth: req.oauth2Client,
+        resource: resource,
+        media: media,
+        uploadType: 'multipart',
+        fields: 'id, modifiedByMeTime, parents, name, fileExtension'
+    }, pushToClient);
+
+    var pushToClient = function (err, file) {
+      if (err) {
+        console.log('error creating JSON for file| file: ', req.body.id, " err: ", err);
+      } else {
+        console.log('this is where the socket.io code executes: ', file.name, ' ', file.id);
       }
     };
 
+/*
     var pushToClient = function (err, file) {
       if (err) {
          console.log("error updating metadata", err);
@@ -76,6 +63,8 @@ router.post('/', urlencodedParser, function (req, res) {
         //  why am I res.end? this is called by the google drive/docs script; so a response is pointless?
         res.end(file.id);
     }
+*/
+
 });
 
 module.exports = router;

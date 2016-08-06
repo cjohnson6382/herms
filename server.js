@@ -47,15 +47,15 @@ app.use(session({
 var callback = require('./routes/callback.js');
 var listfiles = require('./routes/listfiles.js');
 var getfilledtemplate = require('./routes/getfilledtemplate.js');
-//  var savemetadata = require('./routes/savemetadata.js');
+var savemetadata = require('./routes/savemetadata.js');
 
 var routes = [
     app.use('/callback', callback),
     app.use('/listfiles', listfiles),
     app.use('/getfilledtemplate', getfilledtemplate),
+    app.use('/savemetadata', savemetadata),
 ];
 
-//    app.use('/savemetadata', savemetadata),
 
 var promise = Promise.all(routes);
 promise.then(function () {
@@ -73,9 +73,6 @@ promise.then(function () {
     }
 
 });
-
-//  clearly this goes somewhere else
-var API_SCRIPT_EXECUTION_PROJECT_ID = 'McF6XuivFGhAnZMdFBaeECc74iDy0iCRV';
 
 //  on savemetadata:
 //  savemeatadata(function (contractlist) {

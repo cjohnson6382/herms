@@ -9,10 +9,8 @@ router.get('/', function (req, res) {
     oauth2Client.getToken(req.query.code, function(err, tokens) {
         if(!err) {
             req.session.credentials = tokens;
-            console.log(req.session.credentials);
-
-            res.redirect(req.session.redirect_originalUrl);
-            console.log(req.session.redirect_originalUrl);
+            //  req.body = req.session.redirect_originalRequest.body;
+            res.redirect(req.session.originalUrl);
         } else {
             console.log('error retrieving token: ', err);
         }
