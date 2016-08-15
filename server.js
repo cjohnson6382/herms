@@ -6,9 +6,15 @@ var express = require('express');
 var app = express();
 var google = require('googleapis');
 
+
 var session = require('express-session');
 var MongoStore = require('connect-mongo')(session);
 
+var io = require('socket.io');
+
+//  for using pug templates
+app.set('view engine', 'pug');
+app.set('views', './views');
 
 //  var genuuid = require('./modules/util.js').genuuid;
 var genuuid = function () {
@@ -57,6 +63,11 @@ var routes = [
 ];
 
 
+var server;
+var listener;
+
+
+
 var promise = Promise.all(routes);
 promise.then(function () {
     var options = {
@@ -65,7 +76,7 @@ promise.then(function () {
     };
    
     try {
-        https.createServer(options, app).listen(443, function () {
+        server = https.createServer(options, app).listen(443, function () {
             console.log('starting the HTTPS server');
         });
     } catch (e) {
@@ -74,7 +85,21 @@ promise.then(function () {
 
 });
 
+
+listener = io.listen(server);
+listener.sockets.on('connection', function (socket) {
+    socket.on('clientid', function (data) {
+        console.log(data);
+    });
+    //  on connection, storethe client id?
+    //      how is the server going to know where to transmit a response?
+    //      create a socket pool and associate something that's consistent
+    //          on the client req object with the socket.... a name? random id?
+})
+
 //  on savemetadata:
 //  savemeatadata(function (contractlist) {
 //    io.emit('contractadded', contractlist);
 //  });
+
+module.exports = app

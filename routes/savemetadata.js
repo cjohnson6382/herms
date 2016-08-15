@@ -6,11 +6,12 @@ var service = google.drive('v3');
 var bodyParser = require('body-parser');
 var urlencodedParser = bodyParser.urlencoded({ extended: false });
 var oauthProvider = require('../modules/oauthProvider.js');
-
+var scriptapiauth = require('../modules/scriptapiauth.js');
 //      var io = require('/modules/io.js');
 //      var socketpool = io.socketpool;
 
 router.use(urlencodedParser);
+router.use(scriptapiauth);
 router.use(oauthProvider);
 
 router.post('/', function (req, res) {
@@ -47,8 +48,16 @@ router.post('/', function (req, res) {
     var pushToClient = function (err, file) {
       if (err) {
         console.log('error creating JSON for file| file: ', req.body.id, " err: ", err);
+        res.json({
+            type: 'error', 
+            resp: err
+        });
       } else {
         console.log('this is where the socket.io code executes: ', file.name, ' ', file.id);
+        res.json({ 
+            type: 'success', 
+            resp: 'template saved to gdrive' 
+        });
       }
     };
 
