@@ -21,7 +21,7 @@ router.get('/', function (req, res) {
             console.log('No files found.');
         }
         else {
-            console.log('listfiles successfully executed an API call; congratulations you are competent');
+            console.log('listfiles successfully executed');
             res.json({ type: 'listfiles', resp: resp.files });
             res.end();
         }

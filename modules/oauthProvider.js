@@ -17,70 +17,75 @@ var scopes = [
     'https://www.googleapis.com/auth/userinfo.profile'
 ];
 
-var verifyToken = function (req, res, callback) {
-    request(VERIFICATION_URL + req.session.credentials.access_token, function (err, resp, body) {
-        var jsonbody = JSON.parse(body);
-        if (jsonbody.expires_in > 30) {
-            console.log('token still good: ', jsonbody.expires_in);
-            callback();
-        } else {
-            console.log('token is too old: ', jsonbody.expires_in);
-            req.session.cookie.expires = Date.now();
-            sendAuthUrl(req, res);
-        }
+var verifyToken = function (req, res) {
+    var deferred = new Promise(function (resolve, reject) {
+        request(VERIFICATION_URL + req.session.credentials.access_token, function (err, resp, body) {
+            var jsonbody = JSON.parse(body);
+            //  console.log('google response to token verification: ', jsonbody);
+            jsonbody.expires_in > 30 ? resolve(jsonbody.expires_in) : reject(jsonbody.expires_in);
+        });
     });
+
+    return deferred;
 };
 
-var getCredentials = function (callback) {
-    fs.readFile('./credentials/client_secret_tv.json', function (err, content) {
-        if (err) {
-            console.log('error reading auth info from client_secret_tv.json');
-        } else {
-            var credentials = JSON.parse(content.toString('utf8'));
-            callback([
-                credentials.web.client_id, 
-                credentials.web.client_secret, 
-                credentials.web.redirect_uris[0]
-            ]);
-        }
+var getCredentials = function () {
+    var deferred = new Promise(function (resolve, reject) {
+        fs.readFile('./credentials/client_secret_tv.json', function (err, content) {
+            if (err) {
+                console.log('error reading auth info from client_secret_tv.json');
+            } else {
+                var credentials = JSON.parse(content.toString('utf8'));
+                resolve([
+                    credentials.web.client_id, 
+                    credentials.web.client_secret, 
+                    credentials.web.redirect_uris[0]
+                ]);
+            }
+        });
     });
+
+    return deferred;
 };
 
 var sendAuthUrl = function (req, res) {
-    getCredentials(function (auth_credentials) {
-        req.session.authentication = auth_credentials;
-        req.session.originalUrl = req.originalUrl;
-
-        oauth2Client = new OAuth2(...auth_credentials);
-        var url = oauth2Client.generateAuthUrl({
-            access_type: 'offline',  
-            scope: scopes 
+    getCredentials()
+        .then(function (auth_credentials) {
+            req.session.authentication = auth_credentials;
+            oauth2Client = new OAuth2(...req.session.authentication);
+ 
+            var url = oauth2Client.generateAuthUrl({
+                access_type: 'offline',  
+                scope: scopes 
+            });
+            return url;
+        })
+        .then(function (url) {
+            res.json({ type: 'auth', resp: url });
         });
-
-        res.json({ type: 'auth', resp: url });
-    });
 };
 
-var oauthProvider = function (req, res, next)  {
-    if (req.session.code && req.session.authentication) {
-        req.oauth2Client = new OAuth2(...req.session.authentication);
-        req.oauth2Client.getToken(req.session.code, function (err, tokens) {
-            if (err) { 
-                console.log('error getting auth tokens'); 
-                delete req.session.code;
-                sendAuthUrl(req, res);
-            } else {
-                req.session.credentials = tokens;
-                verifyToken(req, res, function () {
-                    req.oauth2Client.setCredentials(req.session.credentials);
-                    next();
-                });
+var setToken = function (req, res, next) {
+    //  req.session.originalUrl = req.originalUrl;
+    req.oauth2Client = new OAuth2(...req.session.authentication);
 
-            }
+    verifyToken(req, res)
+        .then(function (resolve) {
+            req.oauth2Client.setCredentials(req.session.credentials);
+            //  console.log('promise resolved, going to next:  ', req.originalUrl);
+            next();
+        }, function (reject) {
+            //  console.log('promise rejected: ', reject);
+            sendAuthUrl(req, res);
         });
-    } else {
-        sendAuthUrl(req, res);
-    }
+};
+
+var oauthProvider = function (req, res, next) {
+    console.log('req.headers (oauthProvider): ', req.headers, '\n\n\n\n');
+    console.log('originalUrl (oauthProvider): ', req.originalUrl);
+
+    req.session.originalUrl = req.originalUrl;
+    req.session.credentials ? setToken(req, res, next) :  sendAuthUrl(req, res);
 };
 
 module.exports = oauthProvider;

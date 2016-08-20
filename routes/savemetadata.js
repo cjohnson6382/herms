@@ -6,12 +6,12 @@ var service = google.drive('v3');
 var bodyParser = require('body-parser');
 var urlencodedParser = bodyParser.urlencoded({ extended: false });
 var oauthProvider = require('../modules/oauthProvider.js');
-var scriptapiauth = require('../modules/scriptapiauth.js');
+//  var scriptapiauth = require('../modules/scriptapiauth.js');
 //      var io = require('/modules/io.js');
 //      var socketpool = io.socketpool;
 
 router.use(urlencodedParser);
-router.use(scriptapiauth);
+//  router.use(scriptapiauth);
 router.use(oauthProvider);
 
 router.post('/', function (req, res) {

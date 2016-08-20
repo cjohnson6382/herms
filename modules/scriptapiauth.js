@@ -5,8 +5,10 @@ var OAuth2 = google.auth.OAuth2;
 var request = require('request');
 
 var scriptapiauth = function (req, res, next)  {
-    if (req.body.code) {
-        req.session.code = req.body.code;
+    if (req.headers.cookie) {
+        console.log('in scriptapiauth (cookie present): ', req.headers.cookie);
+        console.log('in scriptapiauth (cookie present): ', req.session.originalUrl);
+        //  req.headers.cookie = req.body.cookie;
     }
     next();
 };
