@@ -81,8 +81,8 @@ var setToken = function (req, res, next) {
 };
 
 var oauthProvider = function (req, res, next) {
-    console.log('req.headers (oauthProvider): ', req.headers, '\n\n\n\n');
-    console.log('originalUrl (oauthProvider): ', req.originalUrl);
+    //	console.log('oauthProvider: req.headers: ', req.headers, '\n\n\n\n');
+    //	console.log('oauthProvider: originalUrl: ', req.originalUrl);
 
     req.session.originalUrl = req.originalUrl;
     req.session.credentials ? setToken(req, res, next) :  sendAuthUrl(req, res);

@@ -1,7 +1,8 @@
 script(type="text/javascript").
-   parent.postMessage("closemodal", "*");
-    
-#message
-    p.
-        Server has received the code; closing the iframe
-    p=code
+	var intervalId = setInterval(function () {
+		if (document.getElementById('frame').location.pathname.includes('/callback')) {
+			window.parent.postMessage(document.getElementById('iframe').contentWindow.body.innerHtml, "*");
+		}
+	}, 1500)
+
+iframe#frame(src=url) 

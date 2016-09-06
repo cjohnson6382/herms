@@ -1,20 +1,16 @@
 var express = require('express');
 var router = express.Router();
-var fs = require('fs');
 
 var google = require('googleapis');
 var OAuth2 = google.auth.OAuth2;
+var codestore = require('../modules/codestore.js');
 
-//  var scriptapiauth = require('../modules/scriptapiauth.js');
-
-//  router.use(scriptapiauth);
-
+router.use(codestore);
 router.get('/', function (req, res) {
+		console.log('/callback: savemetadata call should never get here');
 
-    //  console.log('in /callback: ', req.session.originalUrl);
-    //  console.log('in /callback (session): ', req.session.originalUrl);
-
-    console.log('req.headers (/callback): ', req.headers);
+    console.log('/callback: req.headers: ', req.headers);
+		console.log('/callback: req.session: ', req.session);
 
     req.oauth2Client = new OAuth2(...req.session.authentication);
     req.oauth2Client.getToken(req.query.code, function (err, token) {

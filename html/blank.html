@@ -1,0 +1,16 @@
+<!-- controller iframe for app script authentication -->
+
+<html>
+	<script>
+		var getCode = function () {
+			var intervalId = setInterval(function () {
+				
+				if (document.getElementById('frame').location.pathname.includes('/callback')) {
+					window.parent.postMessage(document.getElementById('frame').body.innerHtml, "*");
+					clearInterval(intevalId);
+				}
+			}, 1500);
+		};
+	</script>
+</html>
+
