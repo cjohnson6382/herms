@@ -4,8 +4,8 @@ var bodyParser = require('body-parser');
 var urlencodedParser = bodyParser.urlencoded({ extended: false });
 
 router.use(urlencodedParser);
-router.post('/', function (req, res) {
-	res.render('iframe', { url: req.body.url });
+router.get('/', function (req, res) {
+	res.render('iframe', { url: req.query.url });
 });
 
 module.exports = router;

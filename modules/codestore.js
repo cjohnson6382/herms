@@ -15,7 +15,7 @@ var codestore = function (req, res, next)  {
 			console.log('codestore: no cookie/auth credentials exist (storing code for app script to get later)');
 			var randomcode = genuuid();
 			req.app.locals.codestore[randomcode] = req.query.code;
-			res.end(randomcode);
+			res.render('callback', { code: randomcode });
 		} else {
     	next();
 		}

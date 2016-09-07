@@ -1,8 +1,0 @@
-script(type="text/javascript").
-	var intervalId = setInterval(function () {
-		if (document.getElementById('frame').location.pathname.includes('/callback')) {
-			window.parent.postMessage(document.getElementById('iframe').contentWindow.body.innerHtml, "*");
-		}
-	}, 1500)
-
-iframe#frame(src=url) 
