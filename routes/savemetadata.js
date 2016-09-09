@@ -16,48 +16,69 @@ router.use(scriptauth);
 router.use(oauthProvider);
 
 router.post('/', function (req, res) {
-
-    console.log('in savemetadata: ', req.session);
-
-    var resource = {
-        name: req.body.id + 
-            " -- hermesis template -- " + 
-            req.body.name + 
-            " " + 
-            new Date().toString() + 
-            ".json",
-        properties: { hermesis_config: true }
+		var splitFields = function (fields) {
+      if (fields.length < 110) { return [fields] }
+      
+      var fieldStrings = [], i;
+      
+      while (i < fieldlength) {
+        fieldStrings.push(fields.substring(i, i + 110));
+        i += 110;
+      }
+      return fieldStrings;
     };
 
-    var media = {
-        mimeType: 'application/json',
-        body: JSON.stringify({ 
-            id: req.body.id, 
-            fields: JSON.parse(req.body.fields), 
-            name: req.body.name 
-        })
-    }
+    var makeProperties = function (fieldArray) {
+      if (fieldArray.length > 10) { throw new Error('Too many fields or fields too long') }
+      var properties = {}, i;
+      //	properties.properties = {};
+      
+      for (i = 0; i < 10; i++) {
+        properties['field' + i] = null;
+      }
+      
+      for (i = 0; i < fieldArray.length; i++) {
+        properties['field' + i] = fieldArray[i];
+      }
+      
+      return properties;
+    };
+    
+    //	console.log('in savemetadata', req.body);
 
-    service.files.create({
-        auth: req.oauth2Client,
-        resource: resource,
-        media: media,
-        uploadType: 'multipart',
-        fields: 'id, modifiedByMeTime, parents, name, fileExtension'
-    }, pushToClient);
+    //  var fields = JSON.parse(req.body.fields);
+    var properties = makeProperties(splitFields(req.body.fields));
+    properties.hermesis_template = true;
+   
+		console.log('savemetadata, properties object (should have null "fields" properties): ', properties);
+ 
+    service.files.update({
+      auth: req.oauth2Client,
+      fileId: req.body.id,
+      uploadType: 'multipart',
+      resource: {
+        properties: properties
+      }
+    }, function (err, resp) {
+			if (err) {
+				console.log('error making savemetadata call: ', err);
+			} else {
+      	console.log('saveMetadata call succeeded', resp);
+			}
+    });
 
     var pushToClient = function (err, file) {
       if (err) {
-        console.log('error creating JSON for file| file: ', req.body.id, " err: ", err);
+        console.log('error adding metadata to file: ', req.body.id, " err: ", err);
         res.json({
-            type: 'error', 
+            type: 'error',
             resp: err
         });
       } else {
         console.log('this is where the socket.io code executes: ', file.name, ' ', file.id);
-        res.json({ 
-            type: 'success', 
-            resp: 'template saved to gdrive' 
+        res.json({
+            type: 'success',
+            resp: 'template saved to gdrive'
         });
       }
     };

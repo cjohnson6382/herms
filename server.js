@@ -16,7 +16,22 @@ var io = require('socket.io');
 app.set('view engine', 'pug');
 app.set('views', './views');
 
-app.locals.codestore = {};
+app.locals.codeStore = {};
+
+var setAuth = function () {
+	fs.readFile('./credentials/client_secret_tv.json', function (err, content) {
+	if (err) {
+			console.log('error reading client_secret_tv.json: ', err);
+		} else {
+			var credentials = JSON.parse(content.toString('utf8'));
+			app.locals.authentication = [
+				credentials.web.client_id,
+				credentials.web.client_secret,
+				credentials.web.redirect_uris[0]
+			];
+		}
+	});
+};
 
 //  var genuuid = require('./modules/util.js').genuuid;
 var genuuid = function () {
@@ -64,14 +79,12 @@ var routes = [
     app.use('/listfiles', listfiles),
     app.use('/getfilledtemplate', getfilledtemplate),
     app.use('/savemetadata', savemetadata),
-		app.use('/iframe', iframe)
+		app.use('/iframe', iframe),
+		setAuth()
 ];
-
 
 var server;
 var listener;
-
-
 
 var promise = Promise.all(routes);
 promise.then(function () {

@@ -19,70 +19,43 @@ var scopes = [
 
 var verifyToken = function (req, res) {
     var deferred = new Promise(function (resolve, reject) {
-        request(VERIFICATION_URL + req.session.credentials.access_token, function (err, resp, body) {
+        request(
+					VERIFICATION_URL + req.session.credentials.access_token, 
+					function (err, resp, body) {
             var jsonbody = JSON.parse(body);
-            //  console.log('google response to token verification: ', jsonbody);
-            jsonbody.expires_in > 30 ? resolve(jsonbody.expires_in) : reject(jsonbody.expires_in);
-        });
-    });
-
-    return deferred;
-};
-
-var getCredentials = function () {
-    var deferred = new Promise(function (resolve, reject) {
-        fs.readFile('./credentials/client_secret_tv.json', function (err, content) {
-            if (err) {
-                console.log('error reading auth info from client_secret_tv.json');
-            } else {
-                var credentials = JSON.parse(content.toString('utf8'));
-                resolve([
-                    credentials.web.client_id, 
-                    credentials.web.client_secret, 
-                    credentials.web.redirect_uris[0]
-                ]);
-            }
-        });
+            jsonbody.expires_in > 30 ? 
+							resolve(jsonbody.expires_in) : 
+							reject(jsonbody.expires_in);
+        	}
+				);
     });
 
     return deferred;
 };
 
 var sendAuthUrl = function (req, res) {
-    getCredentials()
-        .then(function (auth_credentials) {
-            req.session.authentication = auth_credentials;
-            oauth2Client = new OAuth2(...req.session.authentication);
- 
-            var url = oauth2Client.generateAuthUrl({
-                access_type: 'offline',  
-                scope: scopes 
-            });
-            return url;
-        })
-        .then(function (url) {
-            res.json({ type: 'auth', resp: url });
-        });
+		var oauth2Client = new OAuth2(...req.app.locals.authentication);
+		var url = oauth2Client.generateAuthUrl({ 
+			access_types: 'offline', 
+			scope: scopes 
+		});
+
+		res.json({ type: 'auth', resp: url });
 };
 
 var setToken = function (req, res, next) {
-    //  req.session.originalUrl = req.originalUrl;
-    req.oauth2Client = new OAuth2(...req.session.authentication);
-
+		req.oauth2Client = new OAuth2(...req.app.locals.authentication);
     verifyToken(req, res)
         .then(function (resolve) {
             req.oauth2Client.setCredentials(req.session.credentials);
-            //  console.log('promise resolved, going to next:  ', req.originalUrl);
             next();
         }, function (reject) {
-            //  console.log('promise rejected: ', reject);
             sendAuthUrl(req, res);
         });
 };
 
 var oauthProvider = function (req, res, next) {
-    //	console.log('oauthProvider: req.headers: ', req.headers, '\n\n\n\n');
-    //	console.log('oauthProvider: originalUrl: ', req.originalUrl);
+		console.log('oauthProvider, req.session.credentials: ', req.session.credentials);
 
     req.session.originalUrl = req.originalUrl;
     req.session.credentials ? setToken(req, res, next) :  sendAuthUrl(req, res);

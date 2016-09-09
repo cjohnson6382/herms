@@ -1,7 +1,7 @@
 script(type="text/javascript").
 
-	document.addEventListener('message', function (evt) {
-		evt.data.postMessage(document.getElementById('body').textContent, "*");
+	window.addEventListener('message', function (evt) {
+		evt.source.postMessage(document.getElementById('body').textContent, "*");
 		window.close();
 	}, false);
 

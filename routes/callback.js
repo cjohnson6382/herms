@@ -7,12 +7,7 @@ var codestore = require('../modules/codestore.js');
 
 router.use(codestore);
 router.get('/', function (req, res) {
-		console.log('/callback: savemetadata call should never get here');
-
-    console.log('/callback: req.headers: ', req.headers);
-		console.log('/callback: req.session: ', req.session);
-
-    req.oauth2Client = new OAuth2(...req.session.authentication);
+    req.oauth2Client = new OAuth2(...req.app.locals.authentication);
     req.oauth2Client.getToken(req.query.code, function (err, token) {
         if (err) {
             console.log('error getting tokens! ', err);

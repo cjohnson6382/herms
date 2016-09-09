@@ -11,12 +11,13 @@ var genuuid = function () {
 };
 
 var codestore = function (req, res, next)  {
-		if (!req.headers.cookie || !req.session.authentication) { // alternately: if (!req.session.authentication)
-			console.log('codestore: no cookie/auth credentials exist (storing code for app script to get later)');
+		if (!req.session.originalUrl) { 
+			console.log('codestore executing', req.session.originalUrl);
 			var randomcode = genuuid();
-			req.app.locals.codestore[randomcode] = req.query.code;
+			req.app.locals.codeStore[randomcode] = req.query.code;
 			res.render('callback', { code: randomcode });
 		} else {
+			console.log('bypassing codestore');
     	next();
 		}
 };
