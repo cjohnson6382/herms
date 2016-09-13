@@ -71,7 +71,7 @@ const download = function (id) {
 	return new Promise(function (resolve, reject) {
 		service.files.export(options)
 			.on('end', function () {
-				resolve(tempfilename, templateName + '.pdf');
+				resolve({ filepath: tempfilename, filename: templateName + '.pdf' });
 			})
 			.on('error', function (err) {
 				console.log('error exporting pdf: ', err);
@@ -90,75 +90,21 @@ router.post('/', function (req, res) {
 	copy(req.body.id)
 		.then(modify, function (err) { console.log('error copying: ', err) })
 		.then(download, function (err) { console.log('error modifying: ', err) })
-		.then(function (file, filename) {
-			res.download(file, filename, function (err) {
+		.then(function (resp) {
+
+			console.log('getfilledtemplate main: ', resp);
+			res.send('all clear, response sent');
+			/*
+			res.download(resp.filepath, resp.filename, function (err) {
 				if (err) {
 					console.log('error downloading the pdf: ', err);
 				} else {
 					console.log('pdf download successful: ', res.headersSent);
 				}
 			});
+			*/;
 		}); 
 
-
-   
- /*   
-    var modify_template = function (err, file_resource) {
-        var options = {
-            auth: req.oauth2Client,
-            scriptId: API_SCRIPT_EXECUTION_PROJECT_ID,
-            resource: {
-               function: 'getDocument',
-               parameters: [file_resource.id, req.body.fields]
-            }
-        };
-        var callback = function (err, resp) {
-            if (err) {
-                console.log("error using the app script execution api: ", err);
-            } else {
-                var tempfilename = 'temp/' + dest.id + "-" + Date() + ".pdf";
-                var dest = fs.createWriteStream(tempfilename);
-            
-                var options = {
-                  auth: req.oauth2Client,
-                  fileId: id,
-                  mimeType: 'application/pdf'
-                };
-            
-                service.files.export(options)
-                .on('end', function () {
-                  res.download(tempfilename, 'contract.pdf', function (err) {
-                    if (err) {
-                      console.log('(in service.files.export of getfilledtemplate) ' + 
-                        'error converting/sending PDF: ', err);
-                    } else {
-                      console.log('(in service.files.export of getfilledtemplate) ' + 
-                        'file successfully converted/sent: ', res.headersSent);
-                    }
-                  });
-                })
-                .on('error', function (err) {
-                  console.log('error writing PDF to temp file: ', err);
-                })
-                .pipe(dest);
-            }
-        };
-        script.scripts.run(options, callback); 
-    };
-    
-    var options = {
-        auth: req.oauth2Client,
-        fileId: req.body.id,
-        fields: "id",
-        resource: {
-            title: tempfile_title,
-            description: "archived copy of a contract hermesis created",
-            parents: [ folderId ]   
-        },    
-    };
-    
-    service.files.copy(options, modify_template);
-*/
 });
 
 module.exports = router;
