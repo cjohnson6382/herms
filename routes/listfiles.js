@@ -9,8 +9,8 @@ router.get('/', function (req, res) {
     service.files.list({
         auth: req.oauth2Client,
         pageSize: 10,
-        fields: "nextPageToken, files(id, name)",
-        q: "properties has { key='hermesis_config' and value='true'} "
+        fields: "nextPageToken, files(id, name, properties)",
+        q: "properties has { key='hermesis_template' and value='true'} "
     }, function(err, resp) {
         if (err) {
             console.log('(/listfiles route) The API returned an error: ', err);
