@@ -22,7 +22,7 @@ router.get('/', function (req, res) {
         }
         else {
             console.log('listfiles successfully executed');
-            res.json({ type: 'listfiles', resp: resp.files });
+            res.json(resp.files);
             res.end();
         }
     });
